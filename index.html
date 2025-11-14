@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PaceHold — Welcome</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="centered">
+    <div class="brand-card">
+      <h1>PaceHold</h1>
+      <p class="muted">Secure escrow for buyers, sellers and riders.</p>
+
+      <div class="roles-grid">
+        <button class="role-btn" data-role="buyer">I am a Buyer</button>
+        <button class="role-btn" data-role="seller">I am a Seller</button>
+        <button class="role-btn" data-role="rider">I am a Rider</button>
+      </div>
+
+      <p class="muted small">Already have an account? <a id="openLogin" href="#">Login</a></p>
+    </div>
+  </main>
+
+  <!-- Signup / Login Modal -->
+  <div id="authModal" class="modal" aria-hidden="true">
+    <div class="modal-card">
+      <button id="closeModal" class="modal-close">✕</button>
+      <h2 id="modalTitle">Create account</h2>
+      <form id="authForm">
+        <input id="fullName" name="fullName" placeholder="Full name or Business name" required />
+        <input id="email" name="email" type="email" placeholder="Email" required />
+        <input id="password" name="password" type="password" placeholder="Password (min 6)" required />
+        <div id="roleContainer" style="display:none">
+          <label for="roleSelect">Role</label>
+          <select id="roleSelect">
+            <option value="buyer">Buyer</option>
+            <option value="seller">Seller</option>
+            <option value="rider">Rider</option>
+          </select>
+        </div>
+        <button id="authSubmit" type="submit">Create account</button>
+        <p class="small muted" id="switchModeLine">Already have an account? <a href="#" id="switchToLogin">Login</a></p>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="auth.js"></script>
+</body>
+</html>
