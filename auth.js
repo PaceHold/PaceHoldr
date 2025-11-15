@@ -1,91 +1,89 @@
-// =========================
-// 1. FIREBASE CONFIG
-// =========================
-const firebaseConfig = {
-  apiKey: "AIzaSyAvfyYoeooY5bx1Z-SGdcEWA-G_zGFY5B8",
-  authDomain: "pacehold-4c7b2.firebaseapp.com",
-  projectId: "pacehold-4c7b2",
-  storageBucket: "pacehold-4c7b2.firebasestorage.app",
-  messagingSenderId: "45898843261",
-  appId: "1:45898843261:web:4df9b7cb59dd5a1c699d14"
-};
+// auth.js — registration, login, safe session handling (compat)
+(function(){
+  if(!window.firebase) return console.error('Firebase not loaded');
 
-// Initialize Firebase
-const app = firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
+  // DOM
+  const roleButtons = document.querySelectorAll('.role-btn');
+  const authModal = document.getElementById('authModal');
+  const closeModal = document.getElementById('closeModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const authForm = document.getElementById('authForm');
+  const fullNameInput = document.getElementById('fullName');
+  const emailInput = document.getElementById('email');
+  const passwordInput = document.getElementById('password');
+  const roleSelect = document.getElementById('roleSelect');
+  const roleContainer = document.getElementById('roleContainer');
+  const openLogin = document.getElementById('openLogin');
+  const switchModeLine = document.getElementById('switchModeLine');
 
+  let chosenRole = 'buyer';
+  let isSignupMode = true;
 
-// =========================
-// 2. SIGN UP USER
-// =========================
-async function registerUser() {
-  const email = document.getElementById("regEmail").value;
-  const password = document.getElementById("regPassword").value;
-  const role = document.getElementById("regRole").value; // buyer, seller, rider
+  // open modal for chosen role
+  roleButtons.forEach(btn => btn.addEventListener('click', (e)=>{
+    chosenRole = e.currentTarget.dataset.role || 'buyer';
+    openAuthModal(true);
+  }));
 
-  try {
-    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-    const user = userCredential.user;
+  openLogin && openLogin.addEventListener('click', (e)=> { e.preventDefault(); openAuthModal(false); });
 
-    // Save role in Firestore
-    await db.collection("users").doc(user.uid).set({
-      email,
-      role
-    });
-
-    alert("Account created successfully!");
-    window.location.href = "index.html";
-  } catch (error) {
-    alert(error.message);
+  function openAuthModal(signup = true) {
+    isSignupMode = signup;
+    authModal.setAttribute('aria-hidden','false');
+    modalTitle.innerText = signup ? 'Create account' : 'Login';
+    roleContainer.style.display = signup ? 'block' : 'none';
+    roleSelect.value = chosenRole;
+    fullNameInput.style.display = signup ? 'block' : 'none';
+    switchModeLine.innerHTML = signup ? 'Already have an account? <a href="#" id="switchToLogin">Login</a>' : 'New here? <a href="#" id="switchToLogin">Create account</a>';
   }
-}
 
+  closeModal && closeModal.addEventListener('click', ()=> authModal.setAttribute('aria-hidden','true'));
+  authModal.addEventListener('click', (ev)=> {
+    if(ev.target && ev.target.id === 'switchToLogin'){ ev.preventDefault(); isSignupMode = !isSignupMode; openAuthModal(isSignupMode); }
+  });
 
-// =========================
-// 3. LOGIN USER
-// =========================
-async function loginUser() {
-  const email = document.getElementById("loginEmail").value;
-  const password = document.getElementById("loginPassword").value;
-
-  try {
-    const userCredential = await auth.signInWithEmailAndPassword(email, password);
-    const user = userCredential.user;
-
-    // Get role from Firestore
-    const doc = await db.collection("users").doc(user.uid).get();
-    const role = doc.data().role;
-
-    // Redirect based on role
-    if (role === "buyer") window.location.href = "buyer.html";
-    if (role === "seller") window.location.href = "seller.html";
-    if (role === "rider") window.location.href = "rider.html";
-
-  } catch (error) {
-    alert(error.message);
-  }
-}
-
-
-// =========================
-// 4. SESSION CHECK
-// =========================
-auth.onAuthStateChanged(async (user) => {
-  const protectedPages = ["dashboard.html", "buyer.html", "seller.html", "rider.html"];
-
-  if (protectedPages.includes(location.pathname.split("/").pop())) {
-    if (!user) {
-      window.location.href = "index.html";
+  // AUTH FORM SUBMIT
+  authForm && authForm.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const name = (fullNameInput.value || '').trim();
+    const email = (emailInput.value || '').trim();
+    const password = (passwordInput.value || '').trim();
+    const role = roleSelect.value || chosenRole || 'buyer';
+    if(isSignupMode){
+      if(!name) return alert('Enter name/business name');
+      try {
+        const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        await cred.user.updateProfile({ displayName: name });
+        await db.collection('users').doc(cred.user.uid).set({
+          uid: cred.user.uid, name, email, role, balance: 0, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        // set session only after auth confirmed to avoid flashes
+        sessionStorage.setItem('pacehold_user', JSON.stringify({ uid: cred.user.uid, name, role }));
+        window.location.href = role + '.html';
+      } catch(err){ alert(err.message); }
+    } else {
+      // login
+      try {
+        const cred = await firebase.auth().signInWithEmailAndPassword(email, password);
+        const ud = await db.collection('users').doc(cred.user.uid).get();
+        const u = ud.exists ? ud.data() : { name: cred.user.displayName || '', role: 'buyer' };
+        sessionStorage.setItem('pacehold_user', JSON.stringify({ uid: cred.user.uid, name: u.name, role: u.role }));
+        window.location.href = u.role + '.html';
+      } catch(err){ alert(err.message); }
     }
-  }
-});
+  });
 
+  // safe onAuthStateChanged to set session when returning
+  firebase.auth().onAuthStateChanged(async (user)=>{
+    if(user){
+      if(!sessionStorage.getItem('pacehold_user')){
+        const ud = await db.collection('users').doc(user.uid).get();
+        const u = ud.exists ? ud.data() : { name: user.displayName || '', role: 'buyer' };
+        sessionStorage.setItem('pacehold_user', JSON.stringify({ uid: user.uid, name: u.name, role: u.role }));
+      }
+    } else {
+      sessionStorage.removeItem('pacehold_user');
+    }
+  });
 
-// =========================
-// 5. LOGOUT
-// =========================
-function logoutUser() {
-  auth.signOut();
-  window.location.href = "index.html";
-}
+})();
