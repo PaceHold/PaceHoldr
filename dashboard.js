@@ -1,28 +1,10 @@
-// dashboard.js (modular SDK)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
-import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
-import {
-  getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot, addDoc, runTransaction, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js";
+// dashboard.js (module imports are not used — file is lightweight and uses global firebase)
+const sessionRaw = sessionStorage.getItem('pacehold_user');
+if(!sessionRaw) { window.location.href = 'index.html'; throw new Error('Not signed in'); }
+const sessionUser = JSON.parse(sessionRaw);
 
-/* ===== REPLACE WITH YOUR FIREBASE CONFIG ===== */
-const firebaseConfig = {
-  apiKey: "AIzaSyAvfyYoeooY5bx1Z-SGdcEWA-G_zGFY5B8",
-  authDomain: "pacehold-4c7b2.firebaseapp.com",
-  projectId: "pacehold-4c7b2",
-  storageBucket: "pacehold-4c7b2.firebasestorage.app",
-  messagingSenderId: "45898843261",
-  appId: "1:45898843261:web:4df9b7cb59dd5a1c699d14"
-};
-/* ============================================= */
+const PLATFORM_FEE_PERCENT = 4;
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth ? getAuth(app) : null; // we just use signOut
-const db = getFirestore(app);
-
-const PLATFORM_FEE_PERCENT = 4; // 4%
-
-// DOM refs
 const welcomeName = document.getElementById('welcomeName');
 const roleLabel = document.getElementById('roleLabel');
 const topUser = document.getElementById('topUser');
@@ -34,159 +16,155 @@ const searchResults = document.getElementById('searchResults');
 const chatBox = document.getElementById('chatBox');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
-const balanceDisplay = document.getElementById('balanceDisplay');
-const escrowDisplay = document.getElementById('escrowDisplay');
-const fundAmount = document.getElementById('fundAmount');
-const fundBtn = document.getElementById('fundBtn');
+const roleSpecificArea = document.getElementById('roleSpecificArea');
 const txList = document.getElementById('txList');
 
-// tabs
-document.querySelectorAll('.tabBtn').forEach(b=>{
-  b.addEventListener('click', ()=> {
-    document.querySelectorAll('.tabBtn').forEach(x=>x.classList.remove('active'));
-    document.querySelectorAll('.tabPanel').forEach(p=>p.classList.remove('active'));
-    b.classList.add('active');
-    document.getElementById(b.dataset.tab).classList.add('active');
-  });
-});
-
-// session guard
-const sessionUserRaw = sessionStorage.getItem('pacehold_user');
-if(!sessionUserRaw){
-  // not signed in — force logout to landing
-  window.location.href = 'index.html';
-  throw new Error('Not signed in');
-}
-const sessionUser = JSON.parse(sessionUserRaw);
-topUser.innerText = sessionUser.name || sessionUser.uid;
-
-// load current user doc & wallet
 let currentUser = null;
-let currentWallet = { balance:0, escrowHeld:0 };
+let wallet = { balance:0, escrowHeld:0 };
+let usersCache = [];
+let currentChatPartner = null;
+let chatUnsub = null;
 
-(async function init(){
-  try {
-    const userSnap = await getDoc(doc(db,'users',sessionUser.uid));
-    if(!userSnap.exists()) {
-      // safety: create basic user doc
-      await setDoc(doc(db,'users',sessionUser.uid), { uid: sessionUser.uid, name: sessionUser.name, role: sessionUser.role, balance:0, createdAt: serverTimestamp() });
+(function init(){
+  // load user doc and wallet
+  db.collection('users').doc(sessionUser.uid).get().then(snap=>{
+    if(!snap.exists){
+      // create
+      db.collection('users').doc(sessionUser.uid).set({ uid: sessionUser.uid, name: sessionUser.name, role: sessionUser.role, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
       currentUser = { uid: sessionUser.uid, name: sessionUser.name, role: sessionUser.role };
-    } else {
-      currentUser = userSnap.data();
-    }
+    } else currentUser = snap.data();
 
     welcomeName.innerText = `Welcome, ${currentUser.name}`;
     roleLabel.innerText = `Role: ${currentUser.role}`;
+    topUser.innerText = currentUser.name || currentUser.uid;
 
-    // ensure wallet doc exists
-    const wRef = doc(db,'wallets', currentUser.uid);
-    const wSnap = await getDoc(wRef);
-    if(!wSnap.exists()){
-      await setDoc(wRef, { uid: currentUser.uid, balance: 0, escrowHeld: 0, updatedAt: serverTimestamp() });
-      currentWallet = { balance:0, escrowHeld:0 };
-    } else {
-      currentWallet = wSnap.data();
-    }
-    updateWalletUI();
+    // wallet
+    db.collection('wallets').doc(currentUser.uid).get().then(ws=>{
+      if(!ws.exists) db.collection('wallets').doc(currentUser.uid).set({ uid: currentUser.uid, balance:0, escrowHeld:0 });
+      else wallet = ws.data();
+      renderRoleArea();
+    });
 
-    // start listeners
-    attachUserListListener();
-    startChatListenerIfAny(); // none until connect
+    attachUserList();
     startTxListener();
+  });
 
-  } catch(err){
-    console.error('init err', err);
-  }
+  // tabs
+  document.querySelectorAll('.tabBtn').forEach(b=>{
+    b.addEventListener('click', ()=> {
+      document.querySelectorAll('.tabBtn').forEach(x=>x.classList.remove('active'));
+      document.querySelectorAll('.tabPanel').forEach(p=>p.classList.remove('active'));
+      b.classList.add('active');
+      document.getElementById(b.dataset.tab).classList.add('active');
+    });
+  });
+
+  // search handlers
+  refreshBtn && refreshBtn.addEventListener('click', ()=> renderUserList(usersCache));
+  searchInput && searchInput.addEventListener('input', (e)=>{
+    const q = (e.target.value||'').trim().toLowerCase();
+    if(!q) return renderUserList(usersCache);
+    const filtered = usersCache.filter(u => ((u.name||'') + ' ' + (u.email||'')).toLowerCase().includes(q));
+    renderUserList(filtered);
+  });
+
+  sendBtn && sendBtn.addEventListener('click', async ()=>{
+    const txt = (chatInput.value||'').trim();
+    if(!txt || !currentChatPartner) return;
+    const chatId = [currentUser.uid, currentChatPartner.uid].sort().join('_');
+    await db.collection('chats').doc(chatId).collection('messages').add({
+      text: txt, from: currentUser.uid, fromName: currentUser.name, to: currentChatPartner.uid, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    chatInput.value = '';
+  });
+
+  logoutBtn && logoutBtn.addEventListener('click', async ()=>{
+    try { await firebase.auth().signOut(); } catch(e){}
+    sessionStorage.removeItem('pacehold_user');
+    window.location.href = 'index.html';
+  });
+
 })();
 
-function updateWalletUI(){
-  balanceDisplay.innerText = formatNGN(currentWallet.balance || 0);
-  escrowDisplay.innerText = formatNGN(currentWallet.escrowHeld || 0);
+function renderRoleArea(){
+  roleSpecificArea.innerHTML = '';
+  if(currentUser.role === 'buyer'){
+    roleSpecificArea.innerHTML = `
+      <div class="boxes fade">
+        <div class="box"><div class="label">Active Holds</div><div id="buyerActive" class="amount">0</div></div>
+        <div class="box"><div class="label">Wallet Balance</div><div id="buyerBalance" class="amount">₦${formatNGN(wallet.balance)}</div></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="card fade"><h3>Activity Feed</h3><div id="buyerFeed" class="hint">No activity yet</div></div>
+        <div class="card fade" style="margin-top:12px"><button id="confirmRelease" class="primary">Confirm Delivery & Release Funds</button></div>
+      </div>`;
+    document.getElementById('confirmRelease').addEventListener('click', ()=> alert('Use the transaction list to confirm specific deliveries.'));
+  }
+
+  if(currentUser.role === 'seller'){
+    roleSpecificArea.innerHTML = `
+      <div class="boxes fade">
+        <div class="box"><div class="label">Pending shipment</div><div id="pendingShip" class="amount">0</div></div>
+        <div class="box"><div class="label">Awaiting confirmations</div><div id="awaitingConf" class="amount">0</div></div>
+        <div class="box"><div class="label">New orders</div><div id="newOrders" class="amount">0</div></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="card fade"><h3>Activity</h3><div id="sellerActivity" class="hint">No activity yet</div></div>
+        <div class="card fade" style="margin-top:12px"><h4>Weekly sales (placeholder)</h4><div class="hint">[small chart]</div><h4 style="margin-top:8px">Payout History</h4><div id="payoutHistory" class="hint">No payouts yet</div></div>
+      </div>`;
+  }
+
+  if(currentUser.role === 'rider'){
+    roleSpecificArea.innerHTML = `
+      <div class="boxes fade">
+        <div class="box"><div class="label">Today's Earnings</div><div id="riderEarnings" class="amount">₦0</div></div>
+        <div class="box"><div class="label">Active Tasks</div><div id="riderTasks" class="amount">0</div></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="card fade"><h3>Next deliveries</h3><div id="riderList" class="hint">No tasks assigned</div></div>
+        <div class="card fade" style="margin-top:12px"><h3>Map (placeholder)</h3><div style="height:160px;background:var(--soft);border-radius:8px;display:flex;align-items:center;justify-content:center">Map placeholder — add Google Maps API later</div></div>
+      </div>`;
+  }
 }
 
-// --- LIST USERS (search / left panel) ---
-let usersCache = [];
-async function attachUserListListener(){
-  const targetRole = getTargetRole(currentUser.role);
-  const q = query(collection(db,'users'), where('role','==',targetRole));
-  onSnapshot(q, snap=>{
+function attachUserList(){
+  const target = (currentUser.role === 'buyer') ? 'seller' : (currentUser.role === 'seller') ? 'rider' : 'seller';
+  const q = db.collection('users').where('role','==',target);
+  q.onSnapshot = q.onSnapshot || function(cb){ // compat helper
+    q.get().then(snap=>cb(snap)); // fallback
+  };
+  db.collection('users').where('role','==',target).onSnapshot(snap=>{
     usersCache = [];
-    snap.forEach(d=> usersCache.push({ id: d.id, ...d.data() }));
+    snap.forEach(d => usersCache.push({ id: d.id, ...d.data() }));
     renderUserList(usersCache);
   });
 }
 
 function renderUserList(list){
-  if(!list || list.length===0){
-    userList.innerHTML = `<div style="color:#bbb;text-align:center;padding:10px">No users found</div>`;
-    return;
-  }
-  userList.innerHTML = list.map(u => {
-    return `<div class="user-row" data-id="${u.uid}">
-      <div>
-        <div class="user-name">${escapeHtml(u.name || u.email)}</div>
-        <div class="small muted">${escapeHtml(u.role)}</div>
-      </div>
-      <div class="label-pill">${escapeHtml(u.email || '')}</div>
-    </div>`;
-  }).join('');
-  // attach click handlers
+  if(!list || list.length === 0){ userList.innerHTML = `<div style="color:#bbb;text-align:center;padding:10px">No users found</div>`; return; }
+  userList.innerHTML = list.map(u => `<div class="user-row" data-id="${u.uid || u.id}"><div><div class="user-name">${escapeHtml(u.name||u.email)}</div><div class="small muted">${escapeHtml(u.role)}</div></div><div class="label-pill">${escapeHtml(u.email||'')}</div></div>`).join('');
   document.querySelectorAll('.user-row').forEach(el=>{
     el.addEventListener('click', ()=> {
       const uid = el.dataset.id;
-      const selected = usersCache.find(x=>x.uid===uid);
+      const selected = usersCache.find(x => (x.uid||x.id) === uid);
       if(selected) openChatWith(selected);
     });
   });
 }
 
-// search box (left panel)
-refreshBtn && refreshBtn.addEventListener('click', ()=> renderUserList(usersCache));
-searchInput && searchInput.addEventListener('input', (e)=>{
-  const q = (e.target.value||'').trim().toLowerCase();
-  if(!q) return renderUserList(usersCache);
-  const filtered = usersCache.filter(u => ((u.name||'') + ' ' + (u.email||'')).toLowerCase().includes(q));
-  renderUserList(filtered);
-});
-
-// search results tab (detailed)
-async function runSearchGlobal(term){
-  const qTerm = term.trim().toLowerCase();
-  if(!qTerm) { searchResults.innerText = 'Enter a name to search'; return; }
-  const target = getTargetRole(currentUser.role);
-  const q = query(collection(db,'users'), where('role','==',target));
-  const snap = await getDocs(q);
-  const matches = [];
-  snap.forEach(d=>{
-    const data = d.data();
-    if(((data.name||'') + ' ' + (data.email||'')).toLowerCase().includes(qTerm)) matches.push({ id: d.id, ...data });
-  });
-  if(matches.length===0) searchResults.innerHTML = '<div style="color:#bbb">No results</div>';
-  else searchResults.innerHTML = matches.map(m=>`<div class="user-row"><strong>${escapeHtml(m.name)}</strong><div class="small muted">${escapeHtml(m.email)}</div><div><button class="small" onclick="openChatFromSearch('${m.uid}')">Chat</button></div></div>`).join('');
-}
-window.openChatFromSearch = function(uid){
-  const user = usersCache.find(u=>u.uid===uid);
-  if(user) openChatWith(user);
-}
-
-// --- CHAT logic ---
-let currentChatPartner = null;
-let currentChatUnsub = null;
 function openChatWith(user){
   currentChatPartner = user;
   document.getElementById('chatWith').innerText = `Chat — ${user.name}`;
-  // open chat tab
   document.querySelectorAll('.tabBtn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.tabPanel').forEach(p=>p.classList.remove('active'));
   document.querySelector('[data-tab="chatTab"]').classList.add('active');
   document.getElementById('chatTab').classList.add('active');
 
-  const chatId = createChatId(currentUser.uid, user.uid);
-  const messagesRef = collection(db,'chats',chatId,'messages');
+  const chatId = [currentUser.uid, user.uid].sort().join('_');
+  const messagesRef = db.collection('chats').doc(chatId).collection('messages').orderBy('createdAt','asc');
 
-  if(currentChatUnsub) currentChatUnsub();
-
-  currentChatUnsub = onSnapshot(messagesRef, snap=>{
+  if(chatUnsub) chatUnsub();
+  chatUnsub = messagesRef.onSnapshot ? messagesRef.onSnapshot(snap=>{
     chatBox.innerHTML = '';
     snap.forEach(m => {
       const msg = m.data();
@@ -196,136 +174,16 @@ function openChatWith(user){
       chatBox.appendChild(div);
     });
     chatBox.scrollTop = chatBox.scrollHeight;
+  }) : messagesRef.get().then(snap=>{
+    chatBox.innerHTML='';
+    snap.forEach(m=>{ const msg=m.data(); const div=document.createElement('div'); div.className='message '+(msg.from===currentUser.uid?'you':'them'); div.innerText=`${msg.fromName||''}: ${msg.text}`; chatBox.appendChild(div); });
   });
 }
 
-sendBtn.addEventListener('click', async ()=>{
-  const text = (chatInput.value||'').trim();
-  if(!text || !currentChatPartner) return;
-  const chatId = createChatId(currentUser.uid, currentChatPartner.uid);
-  await addDoc(collection(db,'chats',chatId,'messages'), {
-    text,
-    from: currentUser.uid,
-    fromName: currentUser.name,
-    to: currentChatPartner.uid,
-    createdAt: serverTimestamp()
-  });
-  chatInput.value = '';
-});
-
-// --- ESCROW & WALLET logic ---
-fundBtn.addEventListener('click', async ()=>{
-  const amt = Number((fundAmount.value||'').replace(/[^0-9.-]+/g,''));
-  if(isNaN(amt) || amt<=0) return alert('Enter a valid amount');
-  const wRef = doc(db,'wallets', currentUser.uid);
-  await runTransaction(db, async (tx)=>{
-    const wSnap = await tx.get(wRef);
-    const old = wSnap.exists() ? wSnap.data() : { balance:0, escrowHeld:0 };
-    tx.set(wRef, { uid: currentUser.uid, balance: (Number(old.balance||0) + amt), escrowHeld: Number(old.escrowHeld||0) }, { merge:true });
-  }).then(()=>{
-    // refresh local
-    getDoc(doc(db,'wallets',currentUser.uid)).then(s => { currentWallet = s.data(); updateWalletUI(); alert('Wallet funded (test)'); });
-  }).catch(e=> alert('Fund failed: ' + e.message));
-});
-
-// create Hold (buyer pays into escrow) — called from UI when buyer chooses seller
-window.createHold = async function(sellerId, amount){
-  const amt = Number(amount);
-  if(isNaN(amt) || amt <= 0) return alert('Invalid amount');
-
-  // create tx id
-  const txRef = doc(collection(db,'transactions'));
-  try{
-    await runTransaction(db, async tx=>{
-      const buyerWRef = doc(db,'wallets', currentUser.uid);
-      const buyerW = await tx.get(buyerWRef);
-      if(!buyerW.exists()) throw new Error('Buyer wallet missing');
-      const bal = Number(buyerW.data().balance || 0);
-      if(bal < amt) throw new Error('Insufficient balance');
-
-      // deduct buyer balance, increase escrowHeld
-      tx.update(buyerWRef, { balance: bal - amt, escrowHeld: (Number(buyerW.data().escrowHeld || 0) + amt) });
-
-      tx.set(txRef, {
-        buyerId: currentUser.uid,
-        sellerId,
-        riderId: null,
-        amount: amt,
-        status: 'held',
-        buyerConfirmed: false,
-        riderConfirmed: false,
-        participants: [currentUser.uid, sellerId],
-        createdAt: serverTimestamp()
-      });
-    });
-    alert('Funds held in escrow');
-    startTxListener();
-  } catch(err){
-    alert('Hold failed: ' + (err.message || err));
-  }
-};
-
-// assign rider (seller action)
-window.assignRiderToTx = async function(txId, riderId){
-  const txRef = doc(db,'transactions', txId);
-  try{
-    await updateDoc(txRef, { riderId, status: 'in_transit', updatedAt: serverTimestamp(), participants: [...new Set([ ...( (await (await getDoc(txRef)).data()).participants || [] ), riderId ]) ] });
-    alert('Rider assigned');
-  } catch(e){ alert('Assign failed: ' + e.message); }
-};
-
-// confirmations
-window.riderConfirm = async function(txId){
-  await updateDoc(doc(db,'transactions',txId), { riderConfirmed: true, status: 'awaiting_confirmation', updatedAt: serverTimestamp() });
-  tryAutoRelease(txId);
-};
-window.buyerConfirm = async function(txId){
-  await updateDoc(doc(db,'transactions',txId), { buyerConfirmed: true, updatedAt: serverTimestamp() });
-  tryAutoRelease(txId);
-};
-
-async function tryAutoRelease(txId){
-  const trRef = doc(db,'transactions',txId);
-  const trSnap = await getDoc(trRef);
-  if(!trSnap.exists()) return;
-  const t = trSnap.data();
-  if(t.buyerConfirmed && t.riderConfirmed && t.status !== 'released'){
-    // compute fee and transfer using Firestore transaction
-    const fee = Math.round((PLATFORM_FEE_PERCENT/100) * t.amount * 100)/100;
-    const sellerAmount = Math.round((t.amount - fee) * 100)/100;
-
-    await runTransaction(db, async tx=>{
-      const buyerWRef = doc(db,'wallets', t.buyerId);
-      const sellerWRef = doc(db,'wallets', t.sellerId);
-      const platformRef = doc(db,'wallets','_platform'); // platform account
-
-      const bSnap = await tx.get(buyerWRef);
-      const sSnap = await tx.get(sellerWRef);
-      const pSnap = await tx.get(platformRef);
-
-      const buyerEsc = Number(bSnap.exists() ? bSnap.data().escrowHeld || 0 : 0);
-      const sellerBal = Number(sSnap.exists() ? sSnap.data().balance || 0 : 0);
-      const platformBal = Number(pSnap.exists() ? pSnap.data().balance || 0 : 0);
-
-      tx.update(buyerWRef, { escrowHeld: Math.max(0, buyerEsc - t.amount) });
-      tx.update(sellerWRef, { balance: sellerBal + sellerAmount });
-      tx.set(platformRef, { uid: '_platform', balance: platformBal + fee }, { merge:true });
-      tx.update(trRef, { status: 'released', fee, sellerAmount, releasedAt: serverTimestamp() });
-    });
-    alert('Escrow released: seller credited');
-  }
-}
-
-// transaction listener to show seller/buyer actions
 function startTxListener(){
-  // get transactions where user participates
-  const q = query(collection(db,'transactions'), where('participants','array-contains', currentUser.uid));
-  onSnapshot(q, snap=>{
+  db.collection('transactions').where('participants','array-contains', sessionUser.uid).onSnapshot(snap=>{
     const items = [];
-    snap.forEach(d => {
-      const t = d.data();
-      items.push({ id: d.id, ...t });
-    });
+    snap.forEach(d=> items.push({ id: d.id, ...d.data() }));
     renderTxList(items);
   });
 }
@@ -333,83 +191,49 @@ function startTxListener(){
 function renderTxList(list){
   if(!list || list.length===0) return txList.innerHTML = '<div style="color:#bbb">No transactions</div>';
   txList.innerHTML = list.map(t=>{
-    const buyer = t.buyerId === currentUser.uid ? 'You' : t.buyerId;
-    const seller = t.sellerId === currentUser.uid ? 'You' : t.sellerId;
-    const rider = t.riderId || 'Unassigned';
-    return `<div class="tx-row">
-      <div><strong>${formatNGN(t.amount)}</strong> — ${t.status}</div>
-      <div style="font-size:13px;color:#9fb2d9">Buyer: ${buyer} • Seller: ${seller} • Rider: ${rider}</div>
-      <div style="margin-top:8px">
-        ${renderTxActions(t)}
-      </div>
-    </div>`;
+    const isBuyer = t.buyerId === sessionUser.uid;
+    const isSeller = t.sellerId === sessionUser.uid;
+    const isRider = t.riderId === sessionUser.uid;
+    return `<div class="tx-row"><div><strong>${formatNGN(t.amount)}</strong> — ${escapeHtml(t.status)}</div>
+      <div class="hint">Buyer: ${short(t.buyerId)} • Seller: ${short(t.sellerId)} • Rider: ${short(t.riderId||'Unassigned')}</div>
+      <div style="margin-top:8px">${txActions(t,isBuyer,isSeller,isRider)}</div></div>`;
   }).join('');
 }
 
-function renderTxActions(t){
-  const isSeller = currentUser.uid === t.sellerId;
-  const isBuyer = currentUser.uid === t.buyerId;
-  const isRider = currentUser.uid === t.riderId;
-  let actions = '';
-  if(isSeller && t.status === 'held'){
-    actions += `<button class="small" onclick="openRiderPicker('${t.id}')">Assign Rider</button>`;
-  }
-  if(isRider && !t.riderConfirmed && (t.status === 'in_transit' || t.status === 'awaiting_confirmation')){
-    actions += `<button class="small" onclick="riderConfirm('${t.id}')">Confirm Arrival</button>`;
-  }
-  if(isBuyer && !t.buyerConfirmed && t.status === 'awaiting_confirmation'){
-    actions += `<button class="small" onclick="buyerConfirm('${t.id}')">Confirm Received</button>`;
-  }
-  if(t.status === 'released') actions += `<span style="color:#9fe29f">Released</span>`;
-  return actions || '<em class="muted">No actions</em>';
+function txActions(t,isBuyer,isSeller,isRider){
+  const parts=[];
+  if(isSeller && t.status === 'held') parts.push(`<button class="small" onclick="openRiderPicker('${t.id}')">Assign Rider</button>`);
+  if(isRider && !t.riderConfirmed && (t.status === 'in_transit' || t.status === 'awaiting_confirmation')) parts.push(`<button class="small" onclick="riderConfirm('${t.id}')">Confirm Arrival</button>`);
+  if(isBuyer && !t.buyerConfirmed && t.status === 'awaiting_confirmation') parts.push(`<button class="small" onclick="buyerConfirm('${t.id}')">Confirm Received</button>`);
+  if(t.status === 'released') parts.push(`<span style="color:#9fe29f">Released</span>`);
+  return parts.join(' ');
 }
 
-// rider picker simple modal (loads riders and choose)
+// open rider picker (simplified UI)
 window.openRiderPicker = async function(txId){
-  const snap = await getDocs(query(collection(db,'users'), where('role','==','rider')));
-  const riders = [];
-  snap.forEach(d=> riders.push({ id:d.id, ...d.data() }));
-  if(riders.length===0) return alert('No riders found');
-  const r = riders[0]; // simple: pick first (you can expand UI)
-  if(confirm(`Assign rider ${r.name || r.email} to transaction?`)){
-    await assignRiderToTx(txId, r.id);
+  const snap = await db.collection('users').where('role','==','rider').get();
+  if(snap.empty) return alert('No riders found');
+  const rDoc = snap.docs[0];
+  const r = rDoc.data();
+  if(confirm(`Assign rider ${r.name || r.email}?`)) {
+    await db.collection('transactions').doc(txId).update({ riderId: rDoc.id, status: 'in_transit', updatedAt: firebase.firestore.FieldValue.serverTimestamp(), participants: firebase.firestore.FieldValue.arrayUnion(rDoc.id) });
+    alert('Rider assigned');
   }
 };
 
-async function assignRiderToTx(txId, riderId){
-  await updateDoc(doc(db,'transactions',txId), { riderId, status: 'in_transit', updatedAt: serverTimestamp(), participants: Array.from(new Set([...( (await (await getDoc(doc(db,'transactions',txId))).data()).participants || []), riderId])) });
-  alert('Rider assigned');
-}
+window.riderConfirm = async function(txId){
+  await db.collection('transactions').doc(txId).update({ riderConfirmed: true, status: 'awaiting_confirmation', updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  // attempt release
+  await window.tryAutoRelease(txId);
+  alert('Rider confirmed arrival.');
+};
 
-// helper: chat id
-function createChatId(a,b){ return [a,b].sort().join('_'); }
+window.buyerConfirm = async function(txId){
+  await db.collection('transactions').doc(txId).update({ buyerConfirmed: true, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  await window.tryAutoRelease(txId);
+  alert('Buyer confirmed received.');
+};
 
-// helper: target role mapping
-function getTargetRole(role){
-  if(role === 'buyer') return 'seller';
-  if(role === 'seller') return 'rider';
-  if(role === 'rider') return 'seller';
-  return 'seller';
-}
-
-// helper: format
-function formatNGN(n){
-  const v = Number(n||0);
-  return v.toLocaleString('en-NG', { style:'currency', currency:'NGN' });
-}
-function escapeHtml(s){ if(!s) return ''; return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-// logout button
-logoutBtn.addEventListener('click', async ()=>{
-  try {
-    // sign out firebase auth if present
-    if(typeof signOut === 'function') {
-      await signOut(typeof auth !== 'undefined' ? auth : { signOut: ()=>Promise.resolve() });
-    }
-  } catch(e){}
-  sessionStorage.removeItem('pacehold_user');
-  window.location.href = 'index.html';
-});
-
-// populate a few helper functions
-function startChatListenerIfAny(){ /* intentionally empty until chat opened */ }
+function formatNGN(n){ const v = Number(n||0); return v.toLocaleString('en-NG', { minimumFractionDigits: 0 }); }
+function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function short(uid){ if(!uid) return '-'; return (uid||'').slice(0,6); }
