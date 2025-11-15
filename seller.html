@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Seller — PaceHold</title>
+<link rel="stylesheet" href="styles.css">
+</head><body>
+  <div class="centered"><div class="brand-card fade">
+    <h2>Welcome Seller</h2>
+    <p class="muted">Preparing your Business Hub…</p>
+    <div style="margin-top:12px">
+      <button class="primary" onclick="goto()">Open Dashboard</button>
+    </div>
+  </div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+  const session = JSON.parse(sessionStorage.getItem('pacehold_user')||'null');
+  function goto(){
+    if(!session) return window.location.href='index.html';
+    if(session.role !== 'seller') return alert('This page is for sellers only');
+    window.location.href = 'dashboard.html';
+  }
+  setTimeout(goto,700);
+</script>
+</body></html>
