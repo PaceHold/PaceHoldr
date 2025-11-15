@@ -1,10 +1,9 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PaceHold — Dashboard</title>
-  <link rel="stylesheet" href="styles.css" />
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PaceHold Dashboard</title>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="topbar">
@@ -15,7 +14,7 @@
     </div>
   </header>
 
-  <div class="container-main" style="display:flex;gap:18px;padding:18px">
+  <div class="container-main">
     <aside style="width:320px">
       <div class="card">
         <h3 id="welcomeName">Welcome</h3>
@@ -24,7 +23,7 @@
         <div style="margin-top:12px">
           <div class="search">
             <input id="searchInput" placeholder="Search by name or email..." />
-            <button id="refreshBtn">⟳</button>
+            <button id="refreshBtn" class="small">⟳</button>
           </div>
 
           <div class="user-list card" id="userList">
@@ -44,38 +43,24 @@
 
       <section id="overview" class="tabPanel active">
         <div class="card">
-          <div class="boxes">
-            <div class="box">
-              <div class="label">Wallet Balance</div>
-              <div id="balanceDisplay" class="amount">₦0.00</div>
-            </div>
-            <div class="box">
-              <div class="label">In Escrow</div>
-              <div id="escrowDisplay" class="amount">₦0.00</div>
-            </div>
-          </div>
-
-          <div style="margin-top:12px">
-            <input id="fundAmount" placeholder="Fund wallet (NGN)" />
-            <button id="fundBtn" class="action">Add Funds (test)</button>
-          </div>
+          <div id="roleSpecificArea"></div>
         </div>
       </section>
 
       <section id="searchTab" class="tabPanel">
         <div class="card">
           <h3>Search results</h3>
-          <div id="searchResults">Use the left panel search or enter a name above.</div>
+          <div id="searchResults">Use the left panel search</div>
         </div>
       </section>
 
       <section id="chatTab" class="tabPanel">
         <div class="card">
           <h3 id="chatWith">Chat</h3>
-          <div id="chatBox" style="height:240px;overflow:auto;background:var(--glass);padding:10px;border-radius:8px"></div>
+          <div id="chatBox" style="height:260px;overflow:auto;background:var(--glass);padding:10px;border-radius:8px"></div>
           <div style="display:flex;gap:8px;margin-top:8px">
             <input id="chatInput" placeholder="Type message..." />
-            <button id="sendBtn" class="action">Send</button>
+            <button id="sendBtn" class="primary">Send</button>
           </div>
         </div>
       </section>
@@ -89,6 +74,12 @@
     </main>
   </div>
 
-  <script type="module" src="dashboard.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script src="firebase-config.js"></script>
+<script src="escrow.js"></script>
+<script src="dashboard.js" type="module"></script>
 </body>
-                                 </html>
+</html>
