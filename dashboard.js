@@ -237,3 +237,13 @@ window.buyerConfirm = async function(txId){
 function formatNGN(n){ const v = Number(n||0); return v.toLocaleString('en-NG', { minimumFractionDigits: 0 }); }
 function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function short(uid){ if(!uid) return '-'; return (uid||'').slice(0,6); }
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+import { auth } from "./auth.js";
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    document.getElementById("displayUID").innerText = user.uid;
+  } else {
+    document.getElementById("displayUID").innerText = "Not logged in";
+  }
+});
