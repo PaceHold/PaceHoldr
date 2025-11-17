@@ -1,9 +1,12 @@
-// auth.js — registration, login, safe session handling (compat)
+// auth.js - handles signup, login, and redirects to role selection
 (function(){
-  if(!window.firebase) return console.error('Firebase not loaded');
+  if(!window.auth || !window.db) {
+    console.error('firebase-config.js not loaded or firebase missing.');
+    return;
+  }
 
-  // DOM
-  const roleButtons = document.querySelectorAll('.role-btn');
+  const openSignup = document.getElementById('openSignup');
+  const openLogin = document.getElementById('openLogin');
   const authModal = document.getElementById('authModal');
   const closeModal = document.getElementById('closeModal');
   const modalTitle = document.getElementById('modalTitle');
@@ -11,76 +14,65 @@
   const fullNameInput = document.getElementById('fullName');
   const emailInput = document.getElementById('email');
   const passwordInput = document.getElementById('password');
-  const roleSelect = document.getElementById('roleSelect');
-  const roleContainer = document.getElementById('roleContainer');
-  const openLogin = document.getElementById('openLogin');
-  const switchModeLine = document.getElementById('switchModeLine');
+  const authSubmit = document.getElementById('authSubmit');
+  const switchToLogin = document.getElementById('switchToLogin');
 
-  let chosenRole = 'buyer';
-  let isSignupMode = true;
+  let signupMode = true;
 
-  // open modal for chosen role
-  roleButtons.forEach(btn => btn.addEventListener('click', (e)=>{
-    chosenRole = e.currentTarget.dataset.role || 'buyer';
-    openAuthModal(true);
-  }));
-
-  openLogin && openLogin.addEventListener('click', (e)=> { e.preventDefault(); openAuthModal(false); });
-
-  function openAuthModal(signup = true) {
-    isSignupMode = signup;
-    authModal.setAttribute('aria-hidden','false');
-    modalTitle.innerText = signup ? 'Create account' : 'Login';
-    roleContainer.style.display = signup ? 'block' : 'none';
-    roleSelect.value = chosenRole;
-    fullNameInput.style.display = signup ? 'block' : 'none';
-    switchModeLine.innerHTML = signup ? 'Already have an account? <a href="#" id="switchToLogin">Login</a>' : 'New here? <a href="#" id="switchToLogin">Create account</a>';
+  function openModal(mode){
+    signupMode = !!mode;
+    modalTitle.innerText = signupMode ? 'Create account' : 'Login';
+    authModal.classList.add('visible');
+  }
+  function close(){
+    authModal.classList.remove('visible');
   }
 
-  closeModal && closeModal.addEventListener('click', ()=> authModal.setAttribute('aria-hidden','true'));
-  authModal.addEventListener('click', (ev)=> {
-    if(ev.target && ev.target.id === 'switchToLogin'){ ev.preventDefault(); isSignupMode = !isSignupMode; openAuthModal(isSignupMode); }
-  });
+  openSignup.addEventListener('click', ()=> openModal(true));
+  openLogin.addEventListener('click', ()=> openModal(false));
+  closeModal.addEventListener('click', close);
+  switchToLogin.addEventListener('click', ()=> openModal(!signupMode));
 
-  // AUTH FORM SUBMIT
-  authForm && authForm.addEventListener('submit', async (e)=>{
+  authForm.addEventListener('submit', async (e)=>{
     e.preventDefault();
-    const name = (fullNameInput.value || '').trim();
-    const email = (emailInput.value || '').trim();
-    const password = (passwordInput.value || '').trim();
-    const role = roleSelect.value || chosenRole || 'buyer';
-    if(isSignupMode){
-      if(!name) return alert('Enter name/business name');
+    const name = fullNameInput.value && fullNameInput.value.trim();
+    const email = emailInput.value && emailInput.value.trim();
+    const password = passwordInput.value && passwordInput.value.trim();
+
+    if(signupMode){
+      if(!name) return alert('Enter a name or business name');
       try {
-        const cred = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        const cred = await auth.createUserWithEmailAndPassword(email, password);
         await cred.user.updateProfile({ displayName: name });
+        // Do NOT set role yet (Option B). Redirect user to role selection.
+        // Create minimal user doc (role will be set on role page)
         await db.collection('users').doc(cred.user.uid).set({
-          uid: cred.user.uid, name, email, role, balance: 0, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        // set session only after auth confirmed to avoid flashes
-        sessionStorage.setItem('pacehold_user', JSON.stringify({ uid: cred.user.uid, name, role }));
-        window.location.href = role + '.html';
+          uid: cred.user.uid,
+          name,
+          email,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        sessionStorage.setItem('pacehold_user', JSON.stringify({ uid: cred.user.uid }));
+        window.location.href = 'role.html';
       } catch(err){ alert(err.message); }
     } else {
       // login
       try {
-        const cred = await firebase.auth().signInWithEmailAndPassword(email, password);
-        const ud = await db.collection('users').doc(cred.user.uid).get();
-        const u = ud.exists ? ud.data() : { name: cred.user.displayName || '', role: 'buyer' };
-        sessionStorage.setItem('pacehold_user', JSON.stringify({ uid: cred.user.uid, name: u.name, role: u.role }));
-        window.location.href = u.role + '.html';
+        const cred = await auth.signInWithEmailAndPassword(email, password);
+        // check if role exists
+        const udoc = await db.collection('users').doc(cred.user.uid).get();
+        const data = udoc.exists ? udoc.data() : null;
+        sessionStorage.setItem('pacehold_user', JSON.stringify({ uid: cred.user.uid }));
+        if(data && data.role) window.location.href = 'dashboard.html';
+        else window.location.href = 'role.html';
       } catch(err){ alert(err.message); }
     }
   });
 
-  // safe onAuthStateChanged to set session when returning
-  firebase.auth().onAuthStateChanged(async (user)=>{
+  // on auth change keep session up to date
+  auth.onAuthStateChanged(async user=>{
     if(user){
-      if(!sessionStorage.getItem('pacehold_user')){
-        const ud = await db.collection('users').doc(user.uid).get();
-        const u = ud.exists ? ud.data() : { name: user.displayName || '', role: 'buyer' };
-        sessionStorage.setItem('pacehold_user', JSON.stringify({ uid: user.uid, name: u.name, role: u.role }));
-      }
+      sessionStorage.setItem('pacehold_user', JSON.stringify({ uid: user.uid }));
     } else {
       sessionStorage.removeItem('pacehold_user');
     }
