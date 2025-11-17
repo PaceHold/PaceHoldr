@@ -3,59 +3,45 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PaceHold — Welcome</title>
-  <link rel="stylesheet" href="styles.css" />
+  <title>PaceHold — Login / Signup</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="centered">
-    <div class="brand-card fade">
+    <div class="brand-card">
       <h1>PaceHold</h1>
       <p class="muted">Secure escrow for buyers, sellers and riders.</p>
 
-      <div class="roles-grid" id="rolesGrid">
-        <button class="role-btn" data-role="buyer">I am a Buyer</button>
-        <button class="role-btn" data-role="seller">I am a Seller</button>
-        <button class="role-btn" data-role="rider">I am a Rider</button>
+      <div style="margin-top:18px">
+        <button id="openSignup" class="role-btn" style="width:100%">Create account</button>
+        <button id="openLogin" class="role-btn" style="width:100%;margin-top:10px;background:#0a254f">Login</button>
       </div>
-
-      <p class="muted small">Already have an account? <a id="openLogin" href="#">Login</a></p>
     </div>
   </main>
 
-  <!-- Auth Modal -->
+  <!-- Modal -->
   <div id="authModal" class="modal" aria-hidden="true">
-    <div class="modal-card slideUp">
-      <button id="closeModal" class="modal-close" aria-label="close">✕</button>
+    <div class="modal-card">
+      <button id="closeModal" class="modal-close">✕</button>
       <h2 id="modalTitle">Create account</h2>
 
       <form id="authForm">
-        <input id="fullName" name="fullName" placeholder="Full name or Business name" />
-        <input id="email" name="email" type="email" placeholder="Email" />
-        <input id="password" name="password" type="password" placeholder="Password (min 6)" />
-        <div id="roleContainer">
-          <label for="roleSelect">Role</label>
-          <select id="roleSelect">
-            <option value="buyer">Buyer</option>
-            <option value="seller">Seller</option>
-            <option value="rider">Rider</option>
-          </select>
-        </div>
-
-        <div style="margin-top:12px">
+        <input id="fullName" placeholder="Full name or Business name" />
+        <input id="email" type="email" placeholder="Email" />
+        <input id="password" type="password" placeholder="Password (min 6)" />
+        <div style="display:flex;gap:8px;margin-top:8px">
           <button id="authSubmit" type="submit" class="primary">Create account</button>
+          <button id="switchToLogin" type="button" class="primary" style="background:#38b6ff;color:#000">Switch to Login</button>
         </div>
-
-        <p class="small muted" id="switchModeLine">Already have an account? <a href="#" id="switchToLogin">Login</a></p>
       </form>
     </div>
   </div>
 
-  <!-- Firebase Compat scripts (required) -->
+  <!-- Firebase compat -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
-  <!-- App scripts -->
   <script src="firebase-config.js"></script>
   <script src="auth.js"></script>
 </body>
