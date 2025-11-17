@@ -1,66 +1,63 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard | PaceHold</title>
-
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Poppins', sans-serif;
-      background: linear-gradient(145deg, #000428, #004e92);
-      color: white;
-      text-align: center;
-      padding: 20px;
-    }
-
-    .balance-box {
-      background: rgba(255, 255, 255, 0.1);
-      padding: 20px;
-      border-radius: 15px;
-      margin: 20px auto;
-      width: 90%;
-      max-width: 400px;
-      box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-    }
-
-    .primary-btn {
-      margin-top: 15px;
-      background: linear-gradient(135deg, #00c6ff, #0072ff);
-      border: none;
-      color: white;
-      padding: 12px 20px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 16px;
-      width: 80%;
-    }
-  </style>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard — PaceHold</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+  <header class="topbar">
+    <div class="brand">PaceHold</div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <div id="topUser" class="small">Loading...</div>
+      <button id="logoutBtn" class="primary">Logout</button>
+    </div>
+  </header>
 
-  <h2>Welcome to Your Dashboard</h2>
+  <div class="container" style="padding-bottom:84px">
+    <aside style="width:320px">
+      <div class="card">
+        <h3 id="welcomeName">Welcome</h3>
+        <div id="roleLabel" class="small muted">Role: -</div>
 
-  <div class="balance-box">
-    <h3>Wallet Balance:</h3>
-    <h1 id="walletAmount">₦0.00</h1>
+        <div style="margin-top:12px">
+          <div class="card" style="padding:10px">
+            <div class="small muted">Search</div>
+            <input id="searchInput" placeholder="Search by name, email..." />
+          </div>
 
-    <button class="primary-btn" onclick="fundWallet()">Fund Wallet</button>
-    <button class="primary-btn" onclick="window.location.href='buyer.html'">Create Escrow</button>
-    <button class="primary-btn" onclick="logout()">Logout</button>
+          <div class="user-list" id="userList" style="margin-top:8px">
+            <div style="color:#bbb;text-align:center;padding:10px">Loading users…</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main style="flex:1">
+      <div class="card" id="roleArea">
+        <!-- Rendered by dashboard.js -->
+        <div id="loadingArea">Loading dashboard…</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- tabs (mobile) -->
+  <div class="bottom-tabs">
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="escrows">Escrows</button>
+    <button class="tab-btn" data-tab="chat">Chat</button>
   </div>
 
   <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
-  <!-- Paystack -->
+  <!-- Paystack inline -->
   <script src="https://js.paystack.co/v1/inline.js"></script>
 
-  <!-- Dashboard Logic -->
+  <script src="firebase-config.js"></script>
+  <script src="escrow.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>
