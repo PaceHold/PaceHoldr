@@ -1,28 +1,26 @@
 <!doctype html>
-<html><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Rider — PaceHold</title>
-<link rel="stylesheet" href="styles.css">
-</head><body>
-  <div class="centered"><div class="brand-card fade">
-    <h2>Welcome Rider</h2>
-    <p class="muted">Preparing your Task Manager…</p>
-    <div style="margin-top:12px">
-      <button class="primary" onclick="goto()">Open Dashboard</button>
+<link rel="stylesheet" href="style.css"></head>
+<body>
+  <main class="centered">
+    <div class="brand-card">
+      <h2>Rider</h2>
+      <p class="muted">Open your Task Manager.</p>
+      <div style="margin-top:12px">
+        <button class="primary" onclick="openDash()">Open Dashboard</button>
+      </div>
     </div>
-  </div></div>
+  </main>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js"></script>
 <script>
-  const session = JSON.parse(sessionStorage.getItem('pacehold_user')||'null');
-  function goto(){
-    if(!session) return window.location.href='index.html';
-    if(session.role !== 'rider') return alert('This page is for riders only');
+  async function openDash(){
+    if(!firebase.auth().currentUser) return window.location.href='index.html';
+    const uid = firebase.auth().currentUser.uid;
+    const u = (await firebase.firestore().collection('users').doc(uid).get()).data();
+    if(!u || u.role !== 'rider') return alert('This page is for riders only');
     window.location.href = 'dashboard.html';
   }
-  setTimeout(goto,700);
+  setTimeout(()=>{ if(firebase && firebase.auth) { const user = firebase.auth().currentUser; if(!user) window.location.href='index.html'; } },600);
 </script>
 </body></html>
