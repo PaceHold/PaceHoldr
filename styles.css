@@ -1,64 +1,69 @@
-body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: linear-gradient(180deg, #000428, #004e92);
-    color: white;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
+/* style.css — Deep-navy fintech theme (matches your screenshot) */
+
+:root{
+  --bg-a:#000428;
+  --bg-b:#004e92;
+  --card: rgba(255,255,255,0.04);
+  --accent: #38b6ff;
+  --accent-2: #00c6ae;
+  --muted: #9fb2d9;
+  --radius: 12px;
 }
 
-.header {
-    text-align: center;
-    padding: 20px 0;
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family: Poppins, Inter, system-ui, Arial;
+  background: linear-gradient(180deg, var(--bg-a), var(--bg-b));
+  color: #fff;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
 }
 
-.balance-box {
-    text-align: center;
-    padding: 20px;
-    background: rgba(255,255,255,0.05);
-    margin: 15px;
-    border-radius: 12px;
-}
+.centered{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
 
-.primary-btn {
-    background: #00c6ff;
-    color: black;
-    padding: 10px 20px;
-    border: none;
-    margin-top: 10px;
-    border-radius: 8px;
-    font-weight: bold;
-    width: 70%;
+/* Brand card (index) */
+.brand-card{
+  width:360px;
+  background: linear-gradient(180deg, rgba(6,14,38,0.9), rgba(3,16,40,0.85));
+  padding:26px;border-radius:14px;box-shadow: 0 18px 40px rgba(0,0,0,0.45);text-align:center;
 }
+.brand-card h1{margin:0;color:var(--accent);font-size:28px}
+.brand-card p.muted{color:var(--muted);margin-top:8px}
+.roles-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:18px}
+@media(min-width:700px){ .roles-grid{grid-template-columns:repeat(3,1fr)} }
+.role-btn{background:linear-gradient(135deg,var(--accent),#0072ff);border:none;padding:12px;border-radius:10px;color:#fff;font-weight:600;cursor:pointer;transition:transform .15s}
+.role-btn:hover{transform:translateY(-3px)}
 
-.page {
-    display: none;
-    padding: 20px;
-}
+/* Modal (role & signup) */
+.modal{position:fixed;left:0;top:0;right:0;bottom:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:99}
+.modal.visible{display:flex}
+.modal-card{background:linear-gradient(180deg,#071a35,#092a4d);padding:20px;border-radius:12px;min-width:320px;max-width:460px;position:relative;box-shadow:0 18px 40px rgba(0,0,0,0.6)}
+.modal-card h2{margin:0 0 8px 0;color:var(--accent)}
+.modal-close{position:absolute;right:10px;top:8px;background:none;border:none;color:#fff;font-size:18px;cursor:pointer}
+input, select { width:100%;padding:12px;margin:8px 0;border-radius:8px;border:none;background:#0c254d;color:#fff }
 
-.page.active {
-    display: block;
-}
+/* dashboard */
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:12px 18px}
+.topbar .brand{color:var(--accent);font-weight:700}
+.container{display:flex;gap:18px;padding:18px}
+@media(max-width:900px){ .container{flex-direction:column;padding:12px} }
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:14px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,0.35)}
 
-.bottom-tabs {
-    background: rgba(255,255,255,0.1);
-    display: flex;
-    justify-content: space-around;
-    padding: 10px 0;
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-}
+/* tabs / mobile nav */
+.bottom-tabs{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,0.03);display:flex;justify-content:space-around;padding:10px 0}
+.tab-btn{background:none;border:none;color:var(--muted);font-weight:600}
+.tab-btn.active{color:var(--accent);}
 
-.tab-btn {
-    background: none;
-    border: none;
-    color: white;
-    font-size: 16px;
-}
+/* fintech boxes */
+.boxes{display:flex;gap:12px;margin-top:12px}
+.box{flex:1;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:14px;border-radius:12px}
+.box .label{font-size:13px;color:#9fb2d9}
+.box .amount{font-weight:800;font-size:18px;margin-top:6px}
 
-.tab-btn.active {
-    font-weight: bold;
-    text-decoration: underline;
-}
+/* list */
+.user-list{margin-top:8px;max-height:55vh;overflow:auto}
+.user-row{display:flex;justify-content:space-between;align-items:center;padding:10px;border-radius:10px;margin-bottom:8px;background:var(--card);cursor:pointer}
+.user-row:hover{background:rgba(255,255,255,0.03)}
+.small{font-size:13px;color:var(--muted)}
+.primary{background:var(--accent-2);color:#000;padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
