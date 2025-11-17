@@ -1,90 +1,53 @@
-<div id="uidBox" 
-     style="background:#ffffff20;padding:10px;margin:10px;border-radius:8px;">
-  <strong>Your UID:</strong>
-  <span id="displayUID">Loading...</span>
-</div>
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PaceHold Dashboard</title>
-<link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escrow Dashboard</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">PaceHold</div>
-    <div class="top-actions">
-      <span id="topUser">Loading...</span>
-      <button id="logoutBtn" class="small danger">Logout</button>
-    </div>
-  </header>
 
-  <div class="container-main">
-    <aside style="width:320px">
-      <div class="card">
-        <h3 id="welcomeName">Welcome</h3>
-        <div id="roleLabel" class="muted">Role: -</div>
+    <!-- Top Section -->
+    <header class="header">
+        <h2>Welcome</h2>
+        <p id="userEmail">Loading...</p>
+    </header>
 
-        <div style="margin-top:12px">
-          <div class="search">
-            <input id="searchInput" placeholder="Search by name or email..." />
-            <button id="refreshBtn" class="small">⟳</button>
-          </div>
+    <!-- Balance Section -->
+    <section class="balance-box">
+        <h3>Wallet Balance</h3>
+        <h1 id="walletAmount">₦0.00</h1>
+        <button class="primary-btn" id="createEscrowBtn">Create Escrow</button>
+    </section>
 
-          <div class="user-list card" id="userList">
-            <div style="color:#bbb;text-align:center;padding:10px">Loading users…</div>
-          </div>
+    <!-- Content Area -->
+    <main id="pageContent">
+        <div id="homePage" class="page active">
+            <h3>Recent Transactions</h3>
+            <ul id="transactionList"></ul>
         </div>
-      </div>
-    </aside>
 
-    <main style="flex:1">
-      <nav style="display:flex;gap:8px;margin-bottom:12px">
-        <button class="tabBtn active" data-tab="overview">Overview</button>
-        <button class="tabBtn" data-tab="searchTab">Search</button>
-        <button class="tabBtn" data-tab="chatTab">Chat</button>
-        <button class="tabBtn" data-tab="escrowTab">Escrow</button>
-      </nav>
-
-      <section id="overview" class="tabPanel active">
-        <div class="card">
-          <div id="roleSpecificArea"></div>
+        <div id="escrowPage" class="page">
+            <h3>Your Escrows</h3>
+            <ul id="escrowList"></ul>
         </div>
-      </section>
 
-      <section id="searchTab" class="tabPanel">
-        <div class="card">
-          <h3>Search results</h3>
-          <div id="searchResults">Use the left panel search</div>
+        <div id="profilePage" class="page">
+            <h3>Profile</h3>
+            <button class="primary-btn" onclick="logout()">Logout</button>
         </div>
-      </section>
-
-      <section id="chatTab" class="tabPanel">
-        <div class="card">
-          <h3 id="chatWith">Chat</h3>
-          <div id="chatBox" style="height:260px;overflow:auto;background:var(--glass);padding:10px;border-radius:8px"></div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <input id="chatInput" placeholder="Type message..." />
-            <button id="sendBtn" class="primary">Send</button>
-          </div>
-        </div>
-      </section>
-
-      <section id="escrowTab" class="tabPanel">
-        <div class="card">
-          <h3>Escrow Transactions</h3>
-          <div id="txList">No transactions yet</div>
-        </div>
-      </section>
     </main>
-  </div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <!-- Bottom Navigation Tabs -->
+    <nav class="bottom-tabs">
+        <button class="tab-btn active" data-tab="homePage">Home</button>
+        <button class="tab-btn" data-tab="escrowPage">Escrows</button>
+        <button class="tab-btn" data-tab="profilePage">Profile</button>
+    </nav>
 
-<script src="firebase-config.js"></script>
-<script src="escrow.js"></script>
-<script src="dashboard.js" type="module"></script>
+    <script src="firebase-config.js"></script>
+    <script src="dashboard.js"></script>
+
 </body>
-</html>
+         </html>
