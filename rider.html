@@ -1,26 +1,23 @@
-<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rider — PaceHold</title>
-<link rel="stylesheet" href="style.css"></head>
-<body>
-  <main class="centered">
-    <div class="brand-card">
-      <h2>Rider</h2>
-      <p class="muted">Open your Task Manager.</p>
-      <div style="margin-top:12px">
-        <button class="primary" onclick="openDash()">Open Dashboard</button>
-      </div>
-    </div>
-  </main>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rider</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
 
-<script>
-  async function openDash(){
-    if(!firebase.auth().currentUser) return window.location.href='index.html';
-    const uid = firebase.auth().currentUser.uid;
-    const u = (await firebase.firestore().collection('users').doc(uid).get()).data();
-    if(!u || u.role !== 'rider') return alert('This page is for riders only');
-    window.location.href = 'dashboard.html';
-  }
-  setTimeout(()=>{ if(firebase && firebase.auth) { const user = firebase.auth().currentUser; if(!user) window.location.href='index.html'; } },600);
-</script>
-</body></html>
+<body class="gradient-bg">
+
+  <h2 class="title">Rider Dashboard</h2>
+
+  <div class="container">
+    <button id="viewDeliveriesBtn" class="btn">View Deliveries</button>
+    <button id="logoutBtn" class="btn outline">Logout</button>
+  </div>
+
+  <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="auth.js"></script>
+  <script type="module" src="dashboard.js"></script>
+</body>
+</html>
