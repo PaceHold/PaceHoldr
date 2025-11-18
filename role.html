@@ -1,23 +1,44 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Select Role</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Select Role — PaceHold</title>
+  <link rel="stylesheet" href="style.css">
 </head>
+<body>
+  <main class="centered">
+    <div class="brand-card">
+      <h2>Select your role</h2>
+      <p class="muted">Choose one — you can change later by contacting support</p>
+      <div class="roles-grid" style="margin-top:18px">
+        <button class="role-btn" id="chooseBuyer" data-role="buyer">Buyer</button>
+        <button class="role-btn" id="chooseSeller" data-role="seller">Seller</button>
+        <button class="role-btn" id="chooseRider" data-role="rider">Rider</button>
+      </div>
+    </div>
+  </main>
 
-<body class="gradient-bg">
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
-  <div class="role-container">
-    <h2 class="title">Select Your Role</h2>
-
-    <button id="buyerBtn" class="btn">Buyer</button>
-    <button id="sellerBtn" class="btn">Seller</button>
-    <button id="riderBtn" class="btn">Rider</button>
-  </div>
-
-  <script type="module" src="firebase-config.js"></script>
-  <script type="module" src="auth.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>
+    (async function(){
+      auth.onAuthStateChanged(async user=>{
+        if(!user) return window.location.href='index.html';
+        document.querySelectorAll('.role-btn').forEach(btn=>{
+          btn.addEventListener('click', async ()=>{
+            const role = btn.dataset.role;
+            const uid = user.uid;
+            await db.collection('users').doc(uid).set({ role, name: user.displayName || null, email: user.email }, { merge:true });
+            await db.collection('wallets').doc(uid).set({ uid, balance:0, escrowHeld:0 }, { merge:true });
+            // redirect to tabbed dashboard
+            window.location.href = 'dashboard.html';
+          });
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
