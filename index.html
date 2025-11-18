@@ -1,26 +1,47 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PaceHold – Login</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PaceHold — Login / Signup</title>
+  <link rel="stylesheet" href="style.css">
 </head>
+<body>
+  <main class="centered">
+    <div class="brand-card">
+      <h1>PaceHold</h1>
+      <p class="muted">Secure escrow for buyers, sellers and riders.</p>
+      <div style="margin-top:18px">
+        <button id="openSignup" class="role-btn" style="width:100%">Create account</button>
+        <button id="openLogin" class="role-btn" style="width:100%;margin-top:10px;background:#0a254f">Login</button>
+      </div>
+    </div>
+  </main>
 
-<body class="gradient-bg">
+  <!-- Modal -->
+  <div id="authModal" class="modal" aria-hidden="true">
+    <div class="modal-card">
+      <button id="closeModal" class="modal-close">✕</button>
+      <h2 id="modalTitle">Create account</h2>
 
-  <div class="container">
-    <h1 class="title">PaceHold</h1>
-
-    <input id="email" type="email" placeholder="Email" class="input" />
-    <input id="password" type="password" placeholder="Password" class="input" />
-
-    <button id="loginBtn" class="btn">Login</button>
-    <button id="signupBtn" class="btn outline">Create Account</button>
+      <form id="authForm">
+        <input id="fullName" placeholder="Full name or Business name" />
+        <input id="email" type="email" placeholder="Email" />
+        <input id="password" type="password" placeholder="Password (min 6)" />
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button id="authSubmit" type="submit" class="primary">Create account</button>
+          <button id="switchToLogin" type="button" class="primary" style="background:#38b6ff;color:#000">Switch to Login</button>
+        </div>
+      </form>
+    </div>
   </div>
 
-  <!-- SCRIPT ORDER -->
-  <script type="module" src="firebase-config.js"></script>
-  <script type="module" src="auth.js"></script>
+  <!-- Firebase compat libs -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <!-- App scripts -->
+  <script src="firebase-config.js"></script>
+  <script src="auth.js"></script>
 </body>
 </html>
