@@ -1,63 +1,23 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Dashboard — PaceHold</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <header class="topbar">
-    <div class="brand">PaceHold</div>
-    <div style="display:flex;gap:12px;align-items:center">
-      <div id="topUser" class="small">Loading...</div>
-      <button id="logoutBtn" class="primary">Logout</button>
-    </div>
-  </header>
 
-  <div class="container" style="padding-bottom:84px">
-    <aside style="width:320px">
-      <div class="card">
-        <h3 id="welcomeName">Welcome</h3>
-        <div id="roleLabel" class="small muted">Role: -</div>
+<body class="gradient-bg">
 
-        <div style="margin-top:12px">
-          <div class="card" style="padding:10px">
-            <div class="small muted">Search</div>
-            <input id="searchInput" placeholder="Search by name, email..." />
-          </div>
+  <h2 class="title">Dashboard</h2>
 
-          <div class="user-list" id="userList" style="margin-top:8px">
-            <div style="color:#bbb;text-align:center;padding:10px">Loading users…</div>
-          </div>
-        </div>
-      </div>
-    </aside>
-
-    <main style="flex:1">
-      <div class="card" id="roleArea">
-        <!-- Rendered by dashboard.js -->
-        <div id="loadingArea">Loading dashboard…</div>
-      </div>
-    </main>
+  <div class="container">
+    <p id="welcomeText">Loading...</p>
   </div>
 
-  <!-- tabs (mobile) -->
-  <div class="bottom-tabs">
-    <button class="tab-btn active" data-tab="overview">Overview</button>
-    <button class="tab-btn" data-tab="escrows">Escrows</button>
-    <button class="tab-btn" data-tab="chat">Chat</button>
-  </div>
-
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-
-  <!-- Paystack inline -->
-  <script src="https://js.paystack.co/v1/inline.js"></script>
-
-  <script src="firebase-config.js"></script>
-  <script src="escrow.js"></script>
-  <script src="dashboard.js"></script>
+  <script type="module" src="firebase-config.js"></script>
+  <script type="module" src="auth.js"></script>
+  <script type="module" src="dashboard.js"></script>
+  <script type="module" src="escrow.js"></script>
 </body>
 </html>
