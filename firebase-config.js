@@ -1,9 +1,8 @@
-// firebase-config.js
-// Uses your confirmed PaceHold Firebase project config.
-
+// firebase-config.js (compat — paste exactly)
 if (!window.firebase) {
-  console.error('Firebase scripts are missing. Make sure you included compat scripts in the HTML before this file.');
-} else if (!firebase.apps.length) {
+  console.error('Firebase SDK missing. Make sure compat scripts are included in your HTML before this file.');
+}
+if (!firebase.apps || !firebase.apps.length) {
   const firebaseConfig = {
     apiKey: "AIzaSyAvfyYoeooY5bx1Z-SGdcEWA-G_zGFY5B8",
     authDomain: "pacehold-4c7b2.firebaseapp.com",
