@@ -1,82 +1,21 @@
-// escrow.js — Escrow & transaction helpers (uses global firebase db)
-// Platform fee: 4%
-
+// escrow.js (compat) — Escrow helper functions used by dashboard.js
 (function(){
   if(!window.db) return console.error('firebase-config.js missing');
 
   const PLATFORM_FEE_PERCENT = 4;
 
-  // createHold(buyerUid, sellerUid, amount) - buyer places funds in escrow
-  window.createHold = async function(sellerUid, amount){
-    const authUser = firebase.auth().currentUser;
-    if(!authUser) return alert('Sign in first');
-    const buyerUid = authUser.uid;
-    const amt = Number(amount);
-    if(isNaN(amt) || amt <= 0) return alert('Invalid amount');
-
-    const buyerWalletRef = db.collection('wallets').doc(buyerUid);
-    const txRef = db.collection('transactions').doc();
-
-    try {
-      await db.runTransaction(async (t)=>{
-        const bw = await t.get(buyerWalletRef);
-        const bal = bw.exists ? Number(bw.data().balance || 0) : 0;
-        if(bal < amt) throw new Error('Insufficient funds in your wallet');
-        // deduct and add to escrowHeld
-        const newBal = Math.round((bal - amt) * 100) / 100;
-        const newEscrow = Math.round(((bw.exists ? Number(bw.data().escrowHeld||0) : 0) + amt) * 100) / 100;
-        t.set(buyerWalletRef, { balance: newBal, escrowHeld: newEscrow }, { merge:true });
-
-        t.set(txRef, {
-          id: txRef.id,
-          buyerId: buyerUid,
-          sellerId: sellerUid,
-          riderId: null,
-          amount: Math.round(amt * 100) / 100,
-          status: 'held',
-          buyerConfirmed: false,
-          riderConfirmed: false,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          participants: [buyerUid, sellerUid]
-        });
-      });
-      alert('Escrow created and funds held.');
-    } catch(e){ alert('Create hold failed: ' + (e.message || e)); }
-  };
-
-  // assignRider(txId, riderUid)
+  // assignRider (for sellers)
   window.assignRider = async function(txId, riderUid){
     await db.collection('transactions').doc(txId).update({
-      riderId: riderUid,
-      status: 'in_transit',
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      rider_uid: riderUid,
+      status: 'rider_assigned',
+      updated_at: firebase.firestore.FieldValue.serverTimestamp(),
       participants: firebase.firestore.FieldValue.arrayUnion(riderUid)
     });
-    alert('Rider assigned');
+    return true;
   };
 
-  // rider confirms arrival
-  window.riderConfirm = async function(txId){
-    await db.collection('transactions').doc(txId).update({
-      riderConfirmed: true,
-      status: 'awaiting_buyer',
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    await tryAutoRelease(txId);
-    alert('Rider confirmed arrival.');
-  };
-
-  // buyer confirms receipt
-  window.buyerConfirm = async function(txId){
-    await db.collection('transactions').doc(txId).update({
-      buyerConfirmed: true,
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    await tryAutoRelease(txId);
-    alert('Buyer confirmed receipt.');
-  };
-
-  // tryAutoRelease: releases funds when both buyerConfirmed & riderConfirmed true
+  // tryAutoRelease: releases funds from escrow to seller when buyerConfirmed && riderConfirmed
   window.tryAutoRelease = async function(txId){
     const txRef = db.collection('transactions').doc(txId);
     try {
@@ -85,13 +24,15 @@
         if(!snap.exists) throw new Error('Transaction not found');
         const tx = snap.data();
         if(tx.status === 'released') return;
-        if(tx.buyerConfirmed && tx.riderConfirmed){
+        const buyerConfirmed = !!tx.buyerConfirmed;
+        const riderConfirmed = !!tx.riderConfirmed;
+        if(buyerConfirmed && riderConfirmed){
           const amount = Number(tx.amount || 0);
           const fee = Math.round((PLATFORM_FEE_PERCENT/100) * amount * 100) / 100;
           const sellerAmount = Math.round((amount - fee) * 100) / 100;
 
-          const buyerWalletRef = db.collection('wallets').doc(tx.buyerId);
-          const sellerWalletRef = db.collection('wallets').doc(tx.sellerId);
+          const buyerWalletRef = db.collection('wallets').doc(tx.buyer_uid);
+          const sellerWalletRef = db.collection('wallets').doc(tx.seller_uid);
           const platformRef = db.collection('wallets').doc('_platform');
 
           const bSnap = await t.get(buyerWalletRef);
