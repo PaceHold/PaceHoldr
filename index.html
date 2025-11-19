@@ -17,16 +17,16 @@
     </div>
   </main>
 
-  <!-- Auth Modal (signup or login) -->
+  <!-- Signup / Login Modal -->
   <div id="authModal" class="modal" aria-hidden="true">
     <div class="modal-card">
       <button id="closeModal" class="modal-close">✕</button>
       <h2 id="modalTitle">Create account</h2>
       <form id="authForm">
-        <input id="fullName" placeholder="Full name or Business name" autocomplete="name" />
-        <input id="email" type="email" placeholder="Email" autocomplete="email" />
-        <input id="password" type="password" placeholder="Password (min 6)" autocomplete="new-password" />
-        <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="fullName" placeholder="Full name or Business name" />
+        <input id="email" type="email" placeholder="Email" />
+        <input id="password" type="password" placeholder="Password (min 6)" />
+        <div style="display:flex;gap:8px;margin-top:12px">
           <button id="authSubmit" type="submit" class="primary">Create account</button>
           <button id="switchToLogin" type="button" class="primary" style="background:#38b6ff;color:#000">Switch to Login</button>
         </div>
@@ -34,16 +34,15 @@
     </div>
   </div>
 
-  <!-- Role selection popup (appears only after successful signup) -->
+  <!-- Role selection modal (shown AFTER successful signup) -->
   <div id="roleModal" class="modal" aria-hidden="true">
-    <div class="modal-card" id="roleCard">
-      <h2 style="text-align:center">Choose your role</h2>
-      <p class="muted" style="text-align:center">Pick one to continue</p>
-      <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px">
-        <button id="roleBuyer" class="role-btn">I am a Buyer</button>
-        <button id="roleSeller" class="role-btn">I am a Seller</button>
-        <button id="roleRider" class="role-btn">I am a Rider</button>
-      </div>
+    <div class="modal-card" style="text-align:center;padding:26px">
+      <h2>Choose your role</h2>
+      <p class="muted">Select the role you'll use for this account (can't change without logout)</p>
+      <button class="role-button" id="roleBuyer">I am a Buyer</button>
+      <button class="role-button" id="roleSeller">I am a Seller</button>
+      <button class="role-button" id="roleRider">I am a Rider</button>
+      <div style="margin-top:12px" class="small muted">If you already have an account you can Login</div>
     </div>
   </div>
 
@@ -54,6 +53,88 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
   <script src="firebase-config.js"></script>
-  <script src="auth.js"></script>
+
+  <script>
+    // auth UI (signup -> then role modal; login goes straight to dashboard)
+    const openSignup = document.getElementById('openSignup');
+    const openLogin = document.getElementById('openLogin');
+    const authModal = document.getElementById('authModal');
+    const closeModal = document.getElementById('closeModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const authForm = document.getElementById('authForm');
+    const fullNameInput = document.getElementById('fullName');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const authSubmit = document.getElementById('authSubmit');
+    const switchToLogin = document.getElementById('switchToLogin');
+
+    const roleModal = document.getElementById('roleModal');
+    const roleBuyer = document.getElementById('roleBuyer');
+    const roleSeller = document.getElementById('roleSeller');
+    const roleRider = document.getElementById('roleRider');
+
+    let pendingNewUser = null; // store uid until role assigned
+
+    function openModal(signup=true){
+      authModal.classList.add('visible');
+      modalTitle.innerText = signup ? 'Create account' : 'Login';
+      authSubmit.innerText = signup ? 'Create account' : 'Login';
+    }
+    openSignup.addEventListener('click', ()=> openModal(true));
+    openLogin.addEventListener('click', ()=> openModal(false));
+    closeModal.addEventListener('click', ()=> authModal.classList.remove('visible'));
+    switchToLogin.addEventListener('click', ()=> openModal(false));
+
+    authForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const name = fullNameInput.value.trim();
+      const email = emailInput.value.trim();
+      const password = passwordInput.value.trim();
+      const isSignup = (modalTitle.innerText || '').toLowerCase().includes('create');
+      if(isSignup){
+        if(!name) return alert('Enter name');
+        try {
+          const cred = await auth.createUserWithEmailAndPassword(email, password);
+          await cred.user.updateProfile({ displayName: name });
+          // create basic user doc but WITHOUT role yet — role assigned next
+          await db.collection('users').doc(cred.user.uid).set({
+            uid: cred.user.uid,
+            name,
+            email,
+            created_at: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge:true });
+          // create wallet
+          await db.collection('wallets').doc(cred.user.uid).set({ uid: cred.user.uid, balance: 0, escrowHeld: 0 }, { merge:true });
+          // close auth modal and show role modal
+          authModal.classList.remove('visible');
+          pendingNewUser = cred.user.uid;
+          roleModal.classList.add('visible');
+        } catch(err){ alert(err.message); }
+      } else {
+        // login
+        try {
+          await auth.signInWithEmailAndPassword(email, password);
+          window.location.href = 'dashboard.html';
+        } catch(err){ alert(err.message); }
+      }
+    });
+
+    // role buttons assign role and then redirect to dashboard
+    async function setRoleAndContinue(role){
+      if(!pendingNewUser) {
+        // maybe user signed up elsewhere — get current user
+        const me = auth.currentUser;
+        if(!me) return alert('No user session found');
+        pendingNewUser = me.uid;
+      }
+      await db.collection('users').doc(pendingNewUser).set({ role }, { merge:true });
+      roleModal.classList.remove('visible');
+      // after a tiny delay redirect to dashboard
+      setTimeout(()=> window.location.href = 'dashboard.html', 200);
+    }
+    roleBuyer.addEventListener('click', ()=> setRoleAndContinue('buyer'));
+    roleSeller.addEventListener('click', ()=> setRoleAndContinue('seller'));
+    roleRider.addEventListener('click', ()=> setRoleAndContinue('rider'));
+  </script>
 </body>
 </html>
