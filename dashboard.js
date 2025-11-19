@@ -1,6 +1,5 @@
-// dashboard.js — main tabbed dashboard logic (search, role UI, actions)
-(function(){
-  // DOM refs
+// dashboard.js — main logic (role-locked, search, chat wiring, escrows, UI)
+(async function(){
   const welcomeName = document.getElementById('welcomeName');
   const roleLabel = document.getElementById('roleLabel');
   const topUser = document.getElementById('topUser');
@@ -12,7 +11,6 @@
   const showBuyerTab = document.getElementById('showBuyerTab');
   const showSellerTab = document.getElementById('showSellerTab');
   const showRiderTab = document.getElementById('showRiderTab');
-  const chatBadge = document.getElementById('chatBadge');
 
   let currentUser = null;
   let usersCache = [];
@@ -27,7 +25,7 @@
     return 'seller';
   }
 
-  // attach user list by role
+  // attach user list and realtime updates for the counterpart role
   function attachUserList(){
     const target = getTargetRole(currentUser.role);
     document.getElementById('searchRoleLabel').innerText = target;
@@ -56,7 +54,7 @@
       </div>
     `).join('');
     document.querySelectorAll('.user-row').forEach(el=>{
-      el.addEventListener('click', ()=>{
+      el.addEventListener('click', async ()=>{
         const id = el.dataset.id;
         const picked = usersCache.find(x=> (x.uid||x.id) === id ) || { uid: id };
         if(picked) openChatWith(picked);
@@ -76,15 +74,14 @@
       let results = [];
       snap.forEach(d=> results.push({ id:d.id, uid:d.id, ...d.data() }));
       if(results.length === 0){
-        let snap2 = await db.collection('users').where('role','==',targetRole).orderBy('uid').startAt(start).endAt(end).limit(30).get().catch(()=>({ forEach: ()=>{} }));
-        snap2.forEach && snap2.forEach(d=> results.push({ id:d.id, uid:d.id, ...d.data() }));
+        // fallback substring local
+        const filtered = usersCache.filter(u=>{
+          const hay = ((u.name||'') + ' ' + (u.uid||'')).toLowerCase();
+          return hay.includes(q);
+        }).slice(0,50);
+        return renderUserList(filtered);
       }
-      if(results.length) return renderUserList(results);
-      const filtered = usersCache.filter(u=>{
-        const hay = ((u.name||'') + ' ' + (u.uid||'')).toLowerCase();
-        return hay.includes(q);
-      }).slice(0,50);
-      return renderUserList(filtered);
+      return renderUserList(results);
     } catch(err){
       console.warn('search error', err);
       const filtered = usersCache.filter(u=>{
@@ -102,7 +99,7 @@
     searchInput.addEventListener('input', debouncedSearch);
   }
 
-  // role UI renderers
+  // render buyer UI
   function renderBuyerUI(){
     roleArea.innerHTML = `
       <div class="card">
@@ -136,14 +133,12 @@
       const amount = Number(document.getElementById('escrowAmount').value);
       if(!sellerUid) return alert('Enter seller UID');
       if(!amount || amount <= 0) return alert('Enter valid amount');
-      // Paystack inline payment
       const handler = PaystackPop.setup({
         key: 'PAYSTACK_PUBLIC_KEY_HERE',
         email: auth.currentUser.email,
         amount: Math.round(amount * 100),
         currency: 'NGN',
         callback: async function(response){
-          // create transaction in Firestore
           await createTransaction({ buyerUid: currentUser.uid, sellerUid, amount, reference: response.reference, description: 'Escrow payment' });
           alert('Escrow created. Seller notified.');
         },
@@ -152,7 +147,7 @@
       handler.openIframe();
     });
 
-    // buyer transactions list
+    // buyer transaction list
     db.collection('transactions').where('buyer_uid','==', currentUser.uid).orderBy('created_at','desc').onSnapshot(snap=>{
       if(snap.empty) return document.getElementById('buyerTxList').innerHTML = `<div class="small muted">No transactions</div>`;
       const arr = [];
@@ -172,7 +167,6 @@
           </div>
         </div>
       `).join('');
-      // wire buttons
       document.querySelectorAll('button[data-action="buyer-arrived"]').forEach(b=>{
         b.onclick = async ()=> {
           const id = b.dataset.id;
@@ -183,6 +177,7 @@
     });
   }
 
+  // render seller UI
   function renderSellerUI(){
     roleArea.innerHTML = `
       <div class="card">
@@ -191,7 +186,6 @@
         <div id="sellerOrdersList" style="margin-top:12px"><div class="small muted">Loading orders…</div></div>
       </div>
     `;
-    // show new escrows where seller_uid == currentUser.uid and status == paid
     db.collection('transactions').where('seller_uid','==', currentUser.uid).onSnapshot(snap=>{
       const arr = [];
       snap.forEach(d=> arr.push({ id:d.id, ...d.data() }));
@@ -205,12 +199,11 @@
             </div>
             <div style="display:flex;flex-direction:column;gap:8px">
               ${tx.status === 'paid' ? `<button class="primary" data-id="${tx.id}" data-action="request-rider">Request Rider</button>` : ''}
-              ${tx.status === 'rider_assigned' ? `<button class="primary" data-id="${tx.id}" data-action="cancel-request">Cancel</button>` : ''}
+              ${tx.status === 'rider_assigned' ? `<div class="small muted">Rider: ${escapeHtml(tx.rider_uid||'')}</div>` : ''}
             </div>
           </div>
         </div>
       `).join('') : `<div class="small muted">No orders</div>`;
-      // wire
       document.querySelectorAll('button[data-action="request-rider"]').forEach(b=>{
         b.onclick = async ()=> {
           const txId = b.dataset.id;
@@ -221,7 +214,6 @@
       });
     });
 
-    // show notifications for seller
     db.collection('notifications').where('to','==', currentUser.uid).orderBy('created_at','desc').limit(10)
       .onSnapshot(snap=>{
         const arr=[]; snap.forEach(d=> arr.push(d.data()));
@@ -230,6 +222,7 @@
       });
   }
 
+  // render rider UI
   function renderRiderUI(){
     roleArea.innerHTML = `
       <div class="card">
@@ -242,10 +235,39 @@
         <div style="margin-top:12px" id="mapBox" class="card"><div id="mapPlaceholder" class="map-placeholder">Map placeholder — Google Maps integration goes here</div></div>
       </div>
     `;
-    // show rider tasks
+    db.collection('riderRequests').where('status','==','open').onSnapshot(snap=>{
+      const arr=[]; snap.forEach(d=> arr.push({ id:d.id, ...d.data() }));
+      // show open requests (riders can accept)
+      document.getElementById('riderTaskList').innerHTML = arr.length ? arr.map(r=>`
+        <div class="card" style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between">
+            <div>
+              <div style="font-weight:700">Request ${escapeHtml(r.id)}</div>
+              <div class="small muted">Tx: ${escapeHtml(r.txId||'')}</div>
+              <div class="small muted">Pickup: ${escapeHtml((r.pickupDetails && r.pickupDetails.pickup) || '')}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button class="primary" data-id="${r.id}" data-action="accept-request">Accept</button>
+            </div>
+          </div>
+        </div>
+      `).join('') : `<div class="small muted">No open requests</div>`;
+      document.querySelectorAll('button[data-action="accept-request"]').forEach(b=>{
+        b.onclick = async ()=> {
+          const reqId = b.dataset.id;
+          const reqDoc = (await db.collection('riderRequests').doc(reqId).get()).data();
+          if(!reqDoc) return alert('Request not found');
+          const txId = reqDoc.txId;
+          await assignRiderToTx(txId, currentUser.uid);
+          // update request status
+          await db.collection('riderRequests').doc(reqId).update({ status:'accepted', riderUid: currentUser.uid });
+          alert('You accepted the request. Proceed to pickup.');
+        };
+      });
+    });
+
     db.collection('transactions').where('rider_uid','==', currentUser.uid).onSnapshot(snap=>{
-      const tasks = [];
-      snap.forEach(d=> tasks.push({ id:d.id, ...d.data() }));
+      const tasks = []; snap.forEach(d=> tasks.push({ id:d.id, ...d.data() }));
       document.getElementById('riderTasksCount').innerText = tasks.length;
       document.getElementById('riderTaskList').innerHTML = tasks.length ? tasks.map(t=>`
         <div class="card" style="margin-bottom:8px">
@@ -254,14 +276,19 @@
               <div style="font-weight:700">${escapeHtml(t.description || t.id)}</div>
               <div class="small muted">Amount: ₦${Number(t.amount).toLocaleString()}</div>
               <div class="small muted">Status: ${escapeHtml(t.status)}</div>
+              <div class="small muted">Seller: ${escapeHtml(t.seller_uid)}</div>
+              <div class="small muted">Buyer: ${escapeHtml(t.buyer_uid)}</div>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px">
               ${t.status !== 'delivered' ? `<button class="primary" data-id="${t.id}" data-action="mark-arrived">Arrived (Confirm)</button>` : `<span style="color:#9fe29f">Delivered</span>`}
+              <button class="primary" data-id="${t.id}" data-action="text-buyer">Text Buyer</button>
+              <button class="primary" data-id="${t.id}" data-action="text-seller">Text Seller</button>
             </div>
           </div>
         </div>
       `).join('') : `<div class="small muted">No tasks</div>`;
-      // wire actions
+
+      // wire actions for tasks (arrived and texting)
       document.querySelectorAll('button[data-action="mark-arrived"]').forEach(b=>{
         b.onclick = async ()=> {
           const id = b.dataset.id;
@@ -269,34 +296,56 @@
           alert('You confirmed arrival. If buyer confirms too, funds will be released.');
         };
       });
+      document.querySelectorAll('button[data-action="text-buyer"]').forEach(b=>{
+        b.onclick = async ()=> {
+          const id = b.dataset.id;
+          const tx = (await db.collection('transactions').doc(id).get()).data();
+          if(!tx) return alert('Transaction not found');
+          const buyer = { uid: tx.buyer_uid, name: (await db.collection('users').doc(tx.buyer_uid).get()).data().name || tx.buyer_uid };
+          openChatWith(buyer);
+        };
+      });
+      document.querySelectorAll('button[data-action="text-seller"]').forEach(b=>{
+        b.onclick = async ()=> {
+          const id = b.dataset.id;
+          const tx = (await db.collection('transactions').doc(id).get()).data();
+          if(!tx) return alert('Transaction not found');
+          const seller = { uid: tx.seller_uid, name: (await db.collection('users').doc(tx.seller_uid).get()).data().name || tx.seller_uid };
+          openChatWith(seller);
+        };
+      });
     });
 
-    // map placeholder start (map.js)
     if(window.startMapForElement) startMapForElement('mapPlaceholder');
   }
 
-  // init when user loaded
+  // initialize after auth
   auth.onAuthStateChanged(async user=>{
     if(!user) return window.location.href = 'index.html';
     const uDoc = await db.collection('users').doc(user.uid).get();
-    currentUser = { uid: user.uid, ...(uDoc.exists ? uDoc.data() : {}) };
+    if(!uDoc.exists || !uDoc.data().role) {
+      // if role missing, send to index for role selection
+      window.location.href = 'index.html';
+      return;
+    }
+    currentUser = { uid: user.uid, ...(uDoc.data()||{}) };
     welcomeName.innerText = `Hi, ${currentUser.name || 'User'}`;
     roleLabel.innerText = `Role: ${currentUser.role || '-'}`;
-    topUser.innerText = currentUser.name || user.email || '';
+    topUser.innerText = currentUser.name || user.email || user.uid;
+    // attach search/list
     attachUserList();
     attachSearch();
-    // show role specific tab automatically
+    // render role-specific UI (and lock role)
     if(currentUser.role === 'buyer') { renderBuyerUI(); }
     else if(currentUser.role === 'seller') { renderSellerUI(); }
     else { renderRiderUI(); }
 
-    // UI tab buttons allow role preview (for testing)
+    // set debug/show tabs (these buttons are only for testing; actual role locked)
     showBuyerTab.onclick = ()=> renderBuyerUI();
     showSellerTab.onclick = ()=> renderSellerUI();
     showRiderTab.onclick = ()=> renderRiderUI();
   });
 
-  // search wiring
   refreshUsersBtn.addEventListener('click', attachUserList);
 
 })();
