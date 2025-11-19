@@ -1,6 +1,6 @@
-// firebase-config.js (compat — paste exactly)
+// firebase-config.js (compat, paste exact file)
 if (!window.firebase) {
-  console.error('Firebase SDK missing. Make sure compat scripts are included in your HTML before this file.');
+  console.error('Firebase compat SDK not loaded. Make sure HTML includes the compat scripts before this file.');
 }
 if (!firebase.apps || !firebase.apps.length) {
   const firebaseConfig = {
@@ -15,3 +15,4 @@ if (!firebase.apps || !firebase.apps.length) {
 }
 window.auth = firebase.auth();
 window.db = firebase.firestore();
+window.rtdb = firebase.database();
