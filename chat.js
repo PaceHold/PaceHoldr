@@ -1,6 +1,4 @@
-// chat.js — Minimal Realtime DB chat system (rooms + live messages)
-// Uses rtdb (firebase.database())
-
+// chat.js — Realtime DB chat fully functional with sender name and left/right balloons
 (function(){
   if(!window.rtdb) return console.error('Realtime DB not initialized (firebase-config.js)');
 
@@ -10,84 +8,98 @@
     return [a,b].sort().join('__');
   }
 
-  // expose to global
+  // returns user display name quickly (cache)
+  const userNameCache = {};
+  async function getUserName(uid){
+    if(!uid) return '';
+    if(userNameCache[uid]) return userNameCache[uid];
+    try {
+      const doc = await db.collection('users').doc(uid).get();
+      const name = doc.exists ? (doc.data().name || uid) : uid;
+      userNameCache[uid] = name;
+      return name;
+    } catch(e){ return uid; }
+  }
+
+  // open chat room with user object { uid, name }
   window.openChatRoom = async function(withUser){
     const me = auth.currentUser;
     if(!me) return alert('Sign in first');
-    const room = roomIdFor(me.uid, withUser.uid || withUser.id);
-    if(!room) return alert('Invalid chat partner');
+    const partnerUid = withUser.uid || withUser.id;
+    if(!partnerUid) return alert('Invalid chat partner');
+    const room = roomIdFor(me.uid, partnerUid);
     window.currentChatRoom = room;
-    document.getElementById('chatWith').innerText = withUser.name ? `${withUser.name} (${withUser.uid||withUser.id})` : (withUser.uid||withUser.id);
+    const partnerName = withUser.name || await getUserName(partnerUid);
+    document.getElementById('chatWith').innerText = `${partnerName} (${partnerUid})`;
     document.getElementById('chatPanel').style.display = 'flex';
     loadMessages(room);
   };
 
-  // send message
+  // send message (includes senderUid and senderName)
   document.getElementById('sendMessageBtn').addEventListener('click', async ()=>{
-    const txt = document.getElementById('messageInput').value.trim();
+    const txtEl = document.getElementById('messageInput');
+    const txt = txtEl.value.trim();
     if(!txt) return;
     const me = auth.currentUser;
     if(!me) return alert('Sign in first');
     const room = window.currentChatRoom;
     if(!room) return alert('Select a chat');
-    const msgRef = rtdb.ref('chats/' + room + '/messages').push();
-    await msgRef.set({
-      from: me.uid,
-      text: txt,
-      ts: firebase.database.ServerValue.TIMESTAMP
-    });
-    document.getElementById('messageInput').value = '';
+    const senderName = (me.displayName || (await getUserName(me.uid))) || me.uid;
+    const payload = { from: me.uid, fromName: senderName, text: txt, ts: firebase.database.ServerValue.TIMESTAMP };
+    await rtdb.ref('chats/' + room + '/messages').push(payload);
+    txtEl.value = '';
   });
 
   // load messages & subscribe
-  let currentListener = null;
-  function loadMessages(room){
+  let currentRef = null;
+  async function loadMessages(room){
     const body = document.getElementById('chatBody');
-    if(currentListener) currentListener.off();
-    const ref = rtdb.ref('chats/' + room + '/messages').limitToLast(200);
-    currentListener = ref;
-    ref.on('value', snap=>{
+    if(currentRef) currentRef.off();
+    currentRef = rtdb.ref('chats/' + room + '/messages').limitToLast(200);
+    currentRef.on('value', async snap=>{
       const data = snap.val() || {};
       const rows = Object.keys(data).map(k => ({ id:k, ...data[k] })).sort((a,b)=>a.ts - b.ts);
-      body.innerHTML = rows.map(m => {
-        const me = auth.currentUser && auth.currentUser.uid;
-        const cls = (me && m.from === me) ? 'msg me' : 'msg them';
-        return `<div class="${cls}">${escapeHtml(m.text)}</div>`;
-      }).join('');
+      // prepare HTML
+      const meUid = auth.currentUser ? auth.currentUser.uid : null;
+      const html = await Promise.all(rows.map(async m => {
+        const isMe = m.from === meUid;
+        const name = m.fromName || await getUserName(m.from);
+        const cls = isMe ? 'msg me' : 'msg them';
+        const time = m.ts ? (new Date(m.ts)).toLocaleTimeString() : '';
+        return `<div class="${cls}"><div style="font-weight:700;font-size:13px">${escapeHtml(name)}</div><div style="margin-top:6px">${escapeHtml(m.text)}</div><div class="meta">${escapeHtml(time)}</div></div>`;
+      }));
+      body.innerHTML = html.join('');
       body.scrollTop = body.scrollHeight;
     });
   }
 
-  // helper escape
+  // escape helper
   function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-  // open chat from dashboard when clicking user-row
-  window.openChatWith = function(user){
-    // user has uid/id and name
-    openChatRoom(user);
+  // helper to open chat from dashboard
+  window.openChatWith = async function(user){
+    await openChatRoom(user);
   };
 
-  // update notification badge count (simple logic: count unread recent rooms)
-  function updateBadge(){
+  // chat notification badge count (basic)
+  async function updateBadge(){
     const me = auth.currentUser;
     if(!me) return;
-    rtdb.ref('chats').once('value').then(snap=>{
+    try {
+      const snap = await rtdb.ref('chats').once('value');
       const rooms = snap.val() || {};
       let cnt = 0;
       Object.keys(rooms).forEach(room=>{
-        const parts = room.split('__');
-        if(parts.indexOf(me.uid) > -1) cnt++;
+        if(room.indexOf(me.uid) > -1) cnt++;
       });
       const el = document.getElementById('chatBadge');
       if(cnt) { el.style.display='flex'; el.innerText = cnt; } else el.style.display='none';
-    }).catch(()=>{});
+    } catch(e){}
   }
-  // poll badge every 10s
   setInterval(updateBadge, 10000);
   updateBadge();
 
-  // toggle functions
+  // toggle chat panel
   window.toggleChatPanel = function(){ const el = document.getElementById('chatPanel'); el.style.display = el.style.display === 'flex' ? 'none' : 'flex'; };
   window.closeChatPanel = function(){ document.getElementById('chatPanel').style.display = 'none'; };
-
 })();
