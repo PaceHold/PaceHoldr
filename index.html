@@ -17,7 +17,7 @@
     </div>
   </main>
 
-  <!-- Signup / Login Modal -->
+  <!-- Auth modal -->
   <div id="authModal" class="modal" aria-hidden="true">
     <div class="modal-card">
       <button id="closeModal" class="modal-close">✕</button>
@@ -28,25 +28,24 @@
         <input id="password" type="password" placeholder="Password (min 6)" />
         <div style="display:flex;gap:8px;margin-top:12px">
           <button id="authSubmit" type="submit" class="primary">Create account</button>
-          <button id="switchToLogin" type="button" class="primary" style="background:#38b6ff;color:#000">Switch to Login</button>
+          <button id="switchToLogin" type="button" class="primary" style="background:#38b6ff;color:#001">Switch to Login</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Role selection modal (shown AFTER successful signup) -->
+  <!-- Role modal (after signup) -->
   <div id="roleModal" class="modal" aria-hidden="true">
     <div class="modal-card" style="text-align:center;padding:26px">
       <h2>Choose your role</h2>
       <p class="muted">Select the role you'll use for this account (can't change without logout)</p>
-      <button class="role-button" id="roleBuyer">I am a Buyer</button>
-      <button class="role-button" id="roleSeller">I am a Seller</button>
-      <button class="role-button" id="roleRider">I am a Rider</button>
-      <div style="margin-top:12px" class="small muted">If you already have an account you can Login</div>
+      <button class="role-btn" id="roleBuyer" style="margin-top:10px">I am a Buyer</button>
+      <button class="role-btn" id="roleSeller" style="margin-top:10px">I am a Seller</button>
+      <button class="role-btn" id="roleRider" style="margin-top:10px">I am a Rider</button>
     </div>
   </div>
 
-  <!-- Firebase compat -->
+  <!-- Firebase compat libs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -55,7 +54,7 @@
   <script src="firebase-config.js"></script>
 
   <script>
-    // auth UI (signup -> then role modal; login goes straight to dashboard)
+    // UI and signup/login logic; role selection after signup
     const openSignup = document.getElementById('openSignup');
     const openLogin = document.getElementById('openLogin');
     const authModal = document.getElementById('authModal');
@@ -67,13 +66,12 @@
     const passwordInput = document.getElementById('password');
     const authSubmit = document.getElementById('authSubmit');
     const switchToLogin = document.getElementById('switchToLogin');
-
     const roleModal = document.getElementById('roleModal');
     const roleBuyer = document.getElementById('roleBuyer');
     const roleSeller = document.getElementById('roleSeller');
     const roleRider = document.getElementById('roleRider');
 
-    let pendingNewUser = null; // store uid until role assigned
+    let pendingNewUser = null;
 
     function openModal(signup=true){
       authModal.classList.add('visible');
@@ -96,7 +94,7 @@
         try {
           const cred = await auth.createUserWithEmailAndPassword(email, password);
           await cred.user.updateProfile({ displayName: name });
-          // create basic user doc but WITHOUT role yet — role assigned next
+          // create user doc WITHOUT role yet; role assigned below
           await db.collection('users').doc(cred.user.uid).set({
             uid: cred.user.uid,
             name,
@@ -105,13 +103,11 @@
           }, { merge:true });
           // create wallet
           await db.collection('wallets').doc(cred.user.uid).set({ uid: cred.user.uid, balance: 0, escrowHeld: 0 }, { merge:true });
-          // close auth modal and show role modal
           authModal.classList.remove('visible');
           pendingNewUser = cred.user.uid;
           roleModal.classList.add('visible');
         } catch(err){ alert(err.message); }
       } else {
-        // login
         try {
           await auth.signInWithEmailAndPassword(email, password);
           window.location.href = 'dashboard.html';
@@ -119,17 +115,14 @@
       }
     });
 
-    // role buttons assign role and then redirect to dashboard
     async function setRoleAndContinue(role){
       if(!pendingNewUser) {
-        // maybe user signed up elsewhere — get current user
         const me = auth.currentUser;
         if(!me) return alert('No user session found');
         pendingNewUser = me.uid;
       }
       await db.collection('users').doc(pendingNewUser).set({ role }, { merge:true });
       roleModal.classList.remove('visible');
-      // after a tiny delay redirect to dashboard
       setTimeout(()=> window.location.href = 'dashboard.html', 200);
     }
     roleBuyer.addEventListener('click', ()=> setRoleAndContinue('buyer'));
