@@ -1,410 +1,302 @@
-// dashboard.js (compat) — central dashboard logic (tabbed, role-aware, search + paystack)
-// Assumes firebase-config.js already loaded (so window.auth, window.db available)
+// dashboard.js — main tabbed dashboard logic (search, role UI, actions)
+(function(){
+  // DOM refs
+  const welcomeName = document.getElementById('welcomeName');
+  const roleLabel = document.getElementById('roleLabel');
+  const topUser = document.getElementById('topUser');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const userList = document.getElementById('userList');
+  const searchInput = document.getElementById('searchInput');
+  const refreshUsersBtn = document.getElementById('refreshUsers');
+  const roleArea = document.getElementById('roleArea');
+  const showBuyerTab = document.getElementById('showBuyerTab');
+  const showSellerTab = document.getElementById('showSellerTab');
+  const showRiderTab = document.getElementById('showRiderTab');
+  const chatBadge = document.getElementById('chatBadge');
 
-// ---------- helpers ----------
-function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function debounce(fn, delay=300){ let t; return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), delay); }; }
+  let currentUser = null;
+  let usersCache = [];
 
-// DOM
-const welcomeName = document.getElementById('welcomeName');
-const roleLabel = document.getElementById('roleLabel');
-const topUser = document.getElementById('topUser');
-const logoutBtn = document.getElementById('logoutBtn');
-const userList = document.getElementById('userList');
-const searchInput = document.getElementById('searchInput');
-const refreshUsersBtn = document.getElementById('refreshUsers');
-const roleArea = document.getElementById('roleArea');
-const createEscrowBtn = document.getElementById('createEscrowBtn');
-const fundWalletBtn = document.getElementById('fundWalletBtn');
-const chatFab = document.getElementById('chatFab');
-const chatPanel = document.getElementById('chatPanel');
-const chatBadge = document.getElementById('chatBadge');
-const messageInput = document.getElementById('messageInput');
-const sendMessageBtn = document.getElementById('sendMessageBtn');
+  function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function debounce(fn, delay=300){ let t; return (...args)=>{ clearTimeout(t); t = setTimeout(()=>fn(...args), delay); }; }
 
-// state
-let currentUser = null;
-let usersCache = []; // cached list of counterpart users
-let txUnsub = null;
-
-// ---------- auth guard & initial load ----------
-auth.onAuthStateChanged(async user=>{
-  if(!user) return window.location.href = 'index.html';
-  // load user doc
-  const udoc = await db.collection('users').doc(user.uid).get();
-  if(!udoc.exists || !udoc.data().role) return window.location.href = 'role.html';
-  currentUser = { uid: user.uid, ...(udoc.data()||{}) };
-  welcomeName.innerText = `Hi, ${currentUser.name || 'User'}`;
-  roleLabel.innerText = `Role: ${currentUser.role || '-'}`;
-  topUser.innerText = currentUser.name || user.email || user.uid;
-
-  attachUserList();
-  attachSearch();
-  listenTransactions();
-  renderRoleArea(currentUser.role);
-});
-
-// logout
-logoutBtn.addEventListener('click', ()=> auth.signOut().then(()=> window.location.href='index.html') );
-
-// refresh list
-if(refreshUsersBtn) refreshUsersBtn.addEventListener('click', ()=> attachUserList() );
-
-// chat toggle
-function toggleChatPanel(){ chatPanel.style.display = chatPanel.style.display === 'none' ? 'flex' : 'none'; }
-function closeChatPanel(){ chatPanel.style.display = 'none'; }
-window.toggleChatPanel = toggleChatPanel; window.closeChatPanel = closeChatPanel;
-
-// send chat (placeholder - simple writes to 'chats' collection)
-sendMessageBtn.addEventListener('click', async ()=>{
-  const txt = messageInput.value && messageInput.value.trim();
-  if(!txt) return;
-  const now = firebase.firestore.FieldValue.serverTimestamp();
-  await db.collection('chats').add({
-    from: currentUser.uid,
-    text: txt,
-    ts: now
-  });
-  messageInput.value = '';
-  alert('Message sent (chat UI is a placeholder).');
-});
-
-// ---------- user list (counterpart selection) ----------
-function getTargetRole(role){
-  if(role === 'buyer') return 'seller';
-  if(role === 'seller') return 'rider';
-  if(role === 'rider') return 'seller';
-  return 'seller';
-}
-
-function attachUserList(){
-  const target = getTargetRole(currentUser.role);
-  // load small set first then realtime listener
-  db.collection('users').where('role','==',target).limit(200).get().then(snap=>{
-    usersCache = [];
-    snap.forEach(d=> usersCache.push({ id:d.id, uid:d.id, ...d.data() }));
-    renderUserList(usersCache);
-  });
-  // live updates
-  db.collection('users').where('role','==',target).onSnapshot(snap=>{
-    usersCache = [];
-    snap.forEach(d=> usersCache.push({ id:d.id, uid:d.id, ...d.data() }));
-    renderUserList(usersCache);
-  });
-}
-
-function renderUserList(list){
-  if(!list || list.length===0){
-    userList.innerHTML = `<div style="color:#bbb;text-align:center;padding:10px">No users found</div>`;
-    return;
+  function getTargetRole(role){
+    if(role === 'buyer') return 'seller';
+    if(role === 'seller') return 'rider';
+    if(role === 'rider') return 'seller';
+    return 'seller';
   }
-  userList.innerHTML = list.map(u=>`
-    <div class="user-row" data-id="${u.uid || u.id}">
-      <div>
-        <div style="font-weight:700">${escapeHtml(u.name||u.email||'Unnamed')}</div>
-        <div class="small muted">${escapeHtml(u.role||'')}</div>
-      </div>
-      <div class="small">${escapeHtml(u.email||'')}</div>
-    </div>
-  `).join('');
-  document.querySelectorAll('.user-row').forEach(el=>{
-    el.addEventListener('click', ()=>{
-      const id = el.dataset.id;
-      const picked = usersCache.find(x=> (x.uid||x.id) === id ) || { uid:id };
-      if(picked) openChatWith(picked);
+
+  // attach user list by role
+  function attachUserList(){
+    const target = getTargetRole(currentUser.role);
+    document.getElementById('searchRoleLabel').innerText = target;
+    db.collection('users').where('role','==',target).limit(200).get().then(snap=>{
+      usersCache = [];
+      snap.forEach(d => usersCache.push({ id:d.id, uid:d.id, ...d.data() }));
+      renderUserList(usersCache);
     });
-  });
-}
-
-// open chat with a user (simple placeholder)
-function openChatWith(user){
-  document.getElementById('chatWith').innerText = user.name || user.email || user.uid;
-  chatPanel.style.display = 'flex';
-}
-
-// ---------- SEARCH (debounced Firestore prefix + local fallback) ----------
-async function searchUsersForQuery(q) {
-  const targetRole = getTargetRole(currentUser.role);
-  q = (q || '').trim().toLowerCase();
-  if(!q) {
-    return renderUserList(usersCache);
+    db.collection('users').where('role','==',target).onSnapshot(snap=>{
+      usersCache = [];
+      snap.forEach(d => usersCache.push({ id:d.id, uid:d.id, ...d.data() }));
+      renderUserList(usersCache);
+    });
   }
-  userList.innerHTML = `<div style="color:#bbb;text-align:center;padding:10px">Searching…</div>`;
-  try {
-    const start = q;
-    const end = q + '\uf8ff';
-    // name prefix
-    let snap = await db.collection('users')
-      .where('role','==', targetRole)
-      .orderBy('name')
-      .startAt(start)
-      .endAt(end)
-      .limit(30)
-      .get();
 
-    let results = [];
-    snap.forEach(d => results.push({ id:d.id, uid:d.id, ...d.data() }));
-
-    // email prefix fallback
-    if(results.length === 0) {
-      let snap2 = await db.collection('users')
-        .where('role','==', targetRole)
-        .orderBy('email')
-        .startAt(start)
-        .endAt(end)
-        .limit(30)
-        .get();
-      snap2.forEach(d => results.push({ id:d.id, uid:d.id, ...d.data() }));
-    }
-
-    if(results.length > 0) return renderUserList(results);
-
-    // last fallback: local cache substring match
-    const filtered = usersCache.filter(u=>{
-      const hay = ((u.name||'') + ' ' + (u.email||'') + ' ' + (u.uid||'')).toLowerCase();
-      return hay.includes(q);
-    }).slice(0,50);
-    return renderUserList(filtered);
-  } catch(err){
-    console.warn('Search error (index may be required):', err);
-    // fallback local
-    const filtered = usersCache.filter(u=>{
-      const hay = ((u.name||'') + ' ' + (u.email||'') + ' ' + (u.uid||'')).toLowerCase();
-      return hay.includes(q);
-    }).slice(0,50);
-    return renderUserList(filtered);
-  }
-}
-
-function attachSearch(){
-  if(!searchInput) return;
-  const onChange = debounce((e)=>{
-    const q = e.target.value.trim().toLowerCase();
-    if(!q) { renderUserList(usersCache); return; }
-    searchUsersForQuery(q);
-  }, 300);
-  searchInput.removeEventListener('input', onChange);
-  searchInput.addEventListener('input', onChange);
-}
-
-// ---------- Dashboard rendering (role-specific) ----------
-function renderRoleArea(role){
-  roleArea.innerHTML = '';
-  if(role === 'buyer') renderBuyer();
-  else if(role === 'seller') renderSeller();
-  else if(role === 'rider') renderRider();
-}
-
-function renderBuyer(){
-  roleArea.innerHTML = `
-    <div class="card">
-      <h3>Buyer — Tracking</h3>
-      <div class="boxes">
-        <div class="box"><div class="label">Wallet</div><div id="buyerWallet" class="amount">₦0</div></div>
-        <div class="box"><div class="label">Active Holds</div><div id="buyerEscrow" class="amount">0</div></div>
-      </div>
-
-      <div style="margin-top:12px" id="buyerFeedArea">
-        <div class="small muted">Activity feed loading…</div>
-      </div>
-
-      <div style="margin-top:12px">
-        <input id="createEscrowSellerInput" placeholder="Seller UID" />
-        <input id="createEscrowAmountInput" placeholder="Amount (₦)" />
-        <button class="primary" id="createEscrowSubmit">Create Escrow (Paystack)</button>
-      </div>
-    </div>
-  `;
-  // wallet listener
-  db.collection('wallets').doc(currentUser.uid).onSnapshot(s=>{
-    if(s.exists) document.getElementById('buyerWallet').innerText = '₦' + (s.data().balance || 0).toLocaleString();
-    else document.getElementById('buyerWallet').innerText = '₦0';
-    if(s.exists) document.getElementById('buyerEscrow').innerText = (s.data().escrowHeld||0).toLocaleString();
-  });
-
-  document.getElementById('createEscrowSubmit').addEventListener('click', ()=> {
-    const sellerUid = document.getElementById('createEscrowSellerInput').value.trim();
-    const amount = Number(document.getElementById('createEscrowAmountInput').value);
-    if(!sellerUid) return alert('Enter seller UID');
-    if(!amount || amount <= 0) return alert('Enter valid amount');
-    // Use Paystack inline to accept buyer payment before creating transaction
-    const handler = PaystackPop.setup({
-      key: 'PAYSTACK_PUBLIC_KEY_HERE', // <-- Replace with your Paystack public key
-      email: (auth.currentUser && auth.currentUser.email) || '',
-      amount: Math.round(amount * 100),
-      currency: 'NGN',
-      callback: async function(response){
-        // create transaction doc with reference
-        const txRef = db.collection('transactions').doc(response.reference);
-        await txRef.set({
-          id: response.reference,
-          buyer_uid: currentUser.uid,
-          seller_uid: sellerUid,
-          rider_uid: null,
-          amount: amount,
-          description: 'Escrow payment',
-          reference: response.reference,
-          status: 'paid',
-          created_at: firebase.firestore.FieldValue.serverTimestamp(),
-          participants: [currentUser.uid, sellerUid]
-        });
-        alert('Payment successful — transaction created: ' + response.reference);
-      },
-      onClose: function(){ alert('Payment cancelled'); }
-    });
-    handler.openIframe();
-  });
-}
-
-function renderSeller(){
-  roleArea.innerHTML = `
-    <div class="card">
-      <h3>Seller — Business Hub</h3>
-      <div class="boxes">
-        <div class="box"><div class="label">Pending shipment</div><div id="pendingShip" class="amount">0</div></div>
-        <div class="box"><div class="label">Awaiting confirmations</div><div id="awaitingConf" class="amount">0</div></div>
-        <div class="box"><div class="label">New orders</div><div id="newOrders" class="amount">0</div></div>
-      </div>
-      <div style="margin-top:12px" id="sellerActivity">Activity loading…</div>
-    </div>
-  `;
-  const uid = currentUser.uid;
-  db.collection('transactions').where('seller_uid','==',uid).onSnapshot(snap=>{
-    let pending=0, awaiting=0, newOrders=0;
-    snap.forEach(d=>{
-      const t = d.data();
-      if(t.status === 'paid') pending++;
-      if(t.status === 'awaiting_buyer') awaiting++;
-      if(t.status === 'in_transit') newOrders++;
-    });
-    document.getElementById('pendingShip').innerText = pending;
-    document.getElementById('awaitingConf').innerText = awaiting;
-    document.getElementById('newOrders').innerText = newOrders;
-  });
-}
-
-function renderRider(){
-  roleArea.innerHTML = `
-    <div class="card">
-      <h3>Rider — Task Manager</h3>
-      <div class="boxes">
-        <div class="box"><div class="label">Today's Earnings</div><div id="riderEarnings" class="amount">₦0</div></div>
-        <div class="box"><div class="label">Active Tasks</div><div id="riderTasksCount" class="amount">0</div></div>
-      </div>
-      <div style="margin-top:12px" id="riderList">No tasks assigned</div>
-      <div style="margin-top:12px" id="mapPlaceholder" class="card">Map placeholder (Google API will be added later)</div>
-    </div>
-  `;
-  const uid = currentUser.uid;
-  db.collection('transactions').where('rider_uid','==',uid).onSnapshot(snap=>{
-    const tasks = [];
-    snap.forEach(d=> tasks.push({ id:d.id, ...d.data() }));
-    document.getElementById('riderTasksCount').innerText = tasks.length;
-    document.getElementById('riderList').innerHTML = tasks.map(t=>`
-      <div class="card" style="margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between">
-          <div>
-            <div style="font-weight:700">${t.description||t.id}</div>
-            <div class="small muted">Amount: ₦${Number(t.amount).toLocaleString()}</div>
-            <div class="small muted">Status: ${t.status}</div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:8px">
-            ${t.status !== 'delivered' ? `<button class="primary" onclick="riderConfirm('${t.id}')">Mark Delivered</button>` : '<span style="color:#9fe29f">Delivered</span>'}
-          </div>
+  // render shows name + uid (no email)
+  function renderUserList(list){
+    if(!list || list.length === 0) return userList.innerHTML = `<div style="color:#bbb;text-align:center;padding:10px">No users found</div>`;
+    userList.innerHTML = list.map(u => `
+      <div class="user-row" data-id="${u.uid || u.id}">
+        <div>
+          <div style="font-weight:700">${escapeHtml(u.name || 'Unnamed')}</div>
+          <div class="small muted">UID: ${escapeHtml(u.uid || u.id)}</div>
         </div>
+        <div class="small muted">${escapeHtml(u.role || '')}</div>
       </div>
     `).join('');
-  });
-}
-
-// ---------- transactions listener (optional) ----------
-function listenTransactions(){
-  const uid = currentUser.uid;
-  if(txUnsub) txUnsub();
-  txUnsub = db.collection('transactions').where('participants','array-contains', uid)
-    .onSnapshot(snap=>{
-      // minimal: you can expand to notify UI
-      // show badge if unread (placeholder)
-      let cnt = 0;
-      snap.forEach(d=>{
-        const t = d.data();
-        if(t.status && (t.status === 'in_transit' || t.status === 'delivered')) cnt++;
+    document.querySelectorAll('.user-row').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const id = el.dataset.id;
+        const picked = usersCache.find(x=> (x.uid||x.id) === id ) || { uid: id };
+        if(picked) openChatWith(picked);
       });
-      chatBadge.style.display = cnt ? 'flex' : 'none';
-      if(cnt) chatBadge.innerText = cnt;
     });
-}
-
-// ---------- fund wallet (paystack) ----------
-fundWalletBtn.addEventListener('click', ()=>{
-  const amt = prompt('Enter amount to fund (₦):');
-  if(!amt || isNaN(amt)) return alert('Enter valid amount');
-  const amountKobo = Math.round(Number(amt) * 100);
-  const user = auth.currentUser;
-  if(!user) return alert('Not logged in');
-  let handler = PaystackPop.setup({
-    key: 'PAYSTACK_PUBLIC_KEY_HERE', // <-- Replace with your Paystack public key
-    email: user.email,
-    amount: amountKobo,
-    currency: 'NGN',
-    callback: function(response){
-      // Save payment and update wallet in Firestore
-      const uid = user.uid;
-      const payRef = db.collection('users').doc(uid).collection('payments').doc(response.reference);
-      payRef.set({
-        amount: Number(amt),
-        reference: response.reference,
-        status: 'successful',
-        created_at: firebase.firestore.FieldValue.serverTimestamp()
-      }).then(()=>{
-        // update wallet doc
-        const walletRef = db.collection('wallets').doc(uid);
-        walletRef.get().then(doc=>{
-          if(doc.exists) walletRef.update({ balance: (Number(doc.data().balance||0) + Number(amt)) });
-          else walletRef.set({ balance: Number(amt), escrowHeld: 0 });
-        });
-        alert('Wallet funded successfully!');
-      });
-    },
-    onClose: function(){ alert('Payment cancelled'); }
-  });
-  handler.openIframe();
-});
-
-// ---------- simple openChatWith wiring already used above ----------
-window.openChatWith = openChatWith;
-
-// ---------- wire create escrow button (quick open small flow) ----------
-createEscrowBtn.addEventListener('click', ()=> {
-  // scroll to buyer create area if buyer; otherwise show instruction
-  if(currentUser.role === 'buyer'){
-    const el = document.getElementById('createEscrowSellerInput');
-    if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
-  } else {
-    alert('Only buyers can create escrows. Switch to a buyer account.');
   }
-});
 
-// attach search after user load
-// attachUserList(); // called earlier in auth.onAuthStateChanged
-// attachSearch(); // called earlier
+  // search (prefix + fallback)
+  async function searchUsersForQuery(q){
+    const targetRole = getTargetRole(currentUser.role);
+    q = (q||'').trim().toLowerCase();
+    if(!q) return renderUserList(usersCache);
+    userList.innerHTML = `<div style="color:#bbb;text-align:center;padding:10px">Searching…</div>`;
+    try {
+      const start = q; const end = q + '\uf8ff';
+      let snap = await db.collection('users').where('role','==',targetRole).orderBy('name').startAt(start).endAt(end).limit(30).get();
+      let results = [];
+      snap.forEach(d=> results.push({ id:d.id, uid:d.id, ...d.data() }));
+      if(results.length === 0){
+        let snap2 = await db.collection('users').where('role','==',targetRole).orderBy('uid').startAt(start).endAt(end).limit(30).get().catch(()=>({ forEach: ()=>{} }));
+        snap2.forEach && snap2.forEach(d=> results.push({ id:d.id, uid:d.id, ...d.data() }));
+      }
+      if(results.length) return renderUserList(results);
+      const filtered = usersCache.filter(u=>{
+        const hay = ((u.name||'') + ' ' + (u.uid||'')).toLowerCase();
+        return hay.includes(q);
+      }).slice(0,50);
+      return renderUserList(filtered);
+    } catch(err){
+      console.warn('search error', err);
+      const filtered = usersCache.filter(u=>{
+        const hay = ((u.name||'') + ' ' + (u.uid||'')).toLowerCase();
+        return hay.includes(q);
+      }).slice(0,50);
+      return renderUserList(filtered);
+    }
+  }
 
-// ---------- small global operations used by escrow.js (riderConfirm etc.) ----------
-window.buyerConfirm = async function(txId){
-  try {
-    await db.collection('transactions').doc(txId).update({ buyerConfirmed:true, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
-    // attempt auto release if escrow.js tryAutoRelease is available
-    if(window.tryAutoRelease) tryAutoRelease(txId).catch(()=>{});
-    alert('You confirmed receipt.');
-  } catch(e){ alert(e.message); }
-};
+  const debouncedSearch = debounce((e)=> searchUsersForQuery(e.target.value), 300);
 
-window.riderConfirm = async function(txId){
-  try {
-    await db.collection('transactions').doc(txId).update({ riderConfirmed:true, status:'delivered', updated_at: firebase.firestore.FieldValue.serverTimestamp() });
-    if(window.tryAutoRelease) tryAutoRelease(txId).catch(()=>{});
-    alert('Rider confirmed delivery.');
-  } catch(e){ alert(e.message); }
-};
+  function attachSearch(){
+    searchInput.removeEventListener('input', debouncedSearch);
+    searchInput.addEventListener('input', debouncedSearch);
+  }
 
-// End of dashboard.js
+  // role UI renderers
+  function renderBuyerUI(){
+    roleArea.innerHTML = `
+      <div class="card">
+        <h3>Buyer — Tracking</h3>
+        <div class="notice">Service fee: <span class="badge">4%</span> — shown here and deducted when released</div>
+        <div class="boxes">
+          <div class="box"><div class="label">Wallet</div><div id="buyerWallet" class="amount">₦0</div></div>
+          <div class="box"><div class="label">Active Holds</div><div id="buyerEscrowCount" class="amount">0</div></div>
+        </div>
+
+        <div style="margin-top:12px">
+          <h4>Create Escrow</h4>
+          <input id="escrowSellerUid" placeholder="Seller UID (copy from their profile)" />
+          <input id="escrowAmount" type="number" placeholder="Amount (₦)" />
+          <div class="small muted">Service fee 4% will be shown and stored.</div>
+          <button id="createEscrowBtn" class="primary">Create Escrow (Paystack)</button>
+        </div>
+
+        <div style="margin-top:12px" id="buyerTxList"><div class="small muted">Loading your transactions…</div></div>
+      </div>
+    `;
+    // wallet listener
+    db.collection('wallets').doc(currentUser.uid).onSnapshot(s=>{
+      if(s.exists) document.getElementById('buyerWallet').innerText = '₦' + (s.data().balance || 0).toLocaleString();
+      else document.getElementById('buyerWallet').innerText = '₦0';
+    });
+
+    // create escrow
+    document.getElementById('createEscrowBtn').addEventListener('click', async ()=>{
+      const sellerUid = document.getElementById('escrowSellerUid').value.trim();
+      const amount = Number(document.getElementById('escrowAmount').value);
+      if(!sellerUid) return alert('Enter seller UID');
+      if(!amount || amount <= 0) return alert('Enter valid amount');
+      // Paystack inline payment
+      const handler = PaystackPop.setup({
+        key: 'PAYSTACK_PUBLIC_KEY_HERE',
+        email: auth.currentUser.email,
+        amount: Math.round(amount * 100),
+        currency: 'NGN',
+        callback: async function(response){
+          // create transaction in Firestore
+          await createTransaction({ buyerUid: currentUser.uid, sellerUid, amount, reference: response.reference, description: 'Escrow payment' });
+          alert('Escrow created. Seller notified.');
+        },
+        onClose: function(){ alert('Payment cancelled'); }
+      });
+      handler.openIframe();
+    });
+
+    // buyer transactions list
+    db.collection('transactions').where('buyer_uid','==', currentUser.uid).orderBy('created_at','desc').onSnapshot(snap=>{
+      if(snap.empty) return document.getElementById('buyerTxList').innerHTML = `<div class="small muted">No transactions</div>`;
+      const arr = [];
+      snap.forEach(d=> arr.push({ id:d.id, ...d.data() }));
+      document.getElementById('buyerTxList').innerHTML = arr.map(tx=> `
+        <div class="card" style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between">
+            <div>
+              <div style="font-weight:700">${escapeHtml(tx.description || tx.id)}</div>
+              <div class="small muted">Seller: ${escapeHtml(tx.seller_uid)}</div>
+              <div class="small muted">Amount: ₦${Number(tx.amount).toLocaleString()} (Fee: ₦${Number(tx.fee||0).toLocaleString()})</div>
+              <div class="small muted">Status: ${escapeHtml(tx.status)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              ${tx.status === 'delivered' && !tx.buyerConfirmed ? `<button class="primary" data-id="${tx.id}" data-action="buyer-arrived">Rider Arrived (Confirm)</button>` : ''}
+            </div>
+          </div>
+        </div>
+      `).join('');
+      // wire buttons
+      document.querySelectorAll('button[data-action="buyer-arrived"]').forEach(b=>{
+        b.onclick = async ()=> {
+          const id = b.dataset.id;
+          await buyerConfirmArrived(id);
+          alert('You confirmed rider arrival. If rider already confirmed, funds will be released.');
+        };
+      });
+    });
+  }
+
+  function renderSellerUI(){
+    roleArea.innerHTML = `
+      <div class="card">
+        <h3>Seller — Business Hub</h3>
+        <div id="sellerNotifications" class="notice small muted">Notifications will appear here</div>
+        <div id="sellerOrdersList" style="margin-top:12px"><div class="small muted">Loading orders…</div></div>
+      </div>
+    `;
+    // show new escrows where seller_uid == currentUser.uid and status == paid
+    db.collection('transactions').where('seller_uid','==', currentUser.uid).onSnapshot(snap=>{
+      const arr = [];
+      snap.forEach(d=> arr.push({ id:d.id, ...d.data() }));
+      document.getElementById('sellerOrdersList').innerHTML = arr.length ? arr.map(tx=> `
+        <div class="card" style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between">
+            <div>
+              <div style="font-weight:700">${escapeHtml(tx.description||tx.id)}</div>
+              <div class="small muted">Amount: ₦${Number(tx.amount).toLocaleString()} (Fee: ₦${Number(tx.fee||0)})</div>
+              <div class="small muted">Status: ${escapeHtml(tx.status)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              ${tx.status === 'paid' ? `<button class="primary" data-id="${tx.id}" data-action="request-rider">Request Rider</button>` : ''}
+              ${tx.status === 'rider_assigned' ? `<button class="primary" data-id="${tx.id}" data-action="cancel-request">Cancel</button>` : ''}
+            </div>
+          </div>
+        </div>
+      `).join('') : `<div class="small muted">No orders</div>`;
+      // wire
+      document.querySelectorAll('button[data-action="request-rider"]').forEach(b=>{
+        b.onclick = async ()=> {
+          const txId = b.dataset.id;
+          const pickup = prompt('Enter pickup details (address or note):') || '';
+          await sellerRequestRider(txId, currentUser.uid, { pickup });
+          alert('Rider request created. Riders will be notified.');
+        };
+      });
+    });
+
+    // show notifications for seller
+    db.collection('notifications').where('to','==', currentUser.uid).orderBy('created_at','desc').limit(10)
+      .onSnapshot(snap=>{
+        const arr=[]; snap.forEach(d=> arr.push(d.data()));
+        if(arr.length === 0) document.getElementById('sellerNotifications').innerText = 'No notifications';
+        else document.getElementById('sellerNotifications').innerHTML = arr.map(n=>`<div class="notice small">${escapeHtml(n.type)} — ${escapeHtml(n.txId||'')}</div>`).join('');
+      });
+  }
+
+  function renderRiderUI(){
+    roleArea.innerHTML = `
+      <div class="card">
+        <h3>Rider — Task Manager</h3>
+        <div class="boxes">
+          <div class="box"><div class="label">Active Tasks</div><div id="riderTasksCount" class="amount">0</div></div>
+          <div class="box"><div class="label">Completed</div><div id="riderCompleted" class="amount">0</div></div>
+        </div>
+        <div style="margin-top:12px" id="riderTaskList">Loading tasks…</div>
+        <div style="margin-top:12px" id="mapBox" class="card"><div id="mapPlaceholder" class="map-placeholder">Map placeholder — Google Maps integration goes here</div></div>
+      </div>
+    `;
+    // show rider tasks
+    db.collection('transactions').where('rider_uid','==', currentUser.uid).onSnapshot(snap=>{
+      const tasks = [];
+      snap.forEach(d=> tasks.push({ id:d.id, ...d.data() }));
+      document.getElementById('riderTasksCount').innerText = tasks.length;
+      document.getElementById('riderTaskList').innerHTML = tasks.length ? tasks.map(t=>`
+        <div class="card" style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between">
+            <div>
+              <div style="font-weight:700">${escapeHtml(t.description || t.id)}</div>
+              <div class="small muted">Amount: ₦${Number(t.amount).toLocaleString()}</div>
+              <div class="small muted">Status: ${escapeHtml(t.status)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              ${t.status !== 'delivered' ? `<button class="primary" data-id="${t.id}" data-action="mark-arrived">Arrived (Confirm)</button>` : `<span style="color:#9fe29f">Delivered</span>`}
+            </div>
+          </div>
+        </div>
+      `).join('') : `<div class="small muted">No tasks</div>`;
+      // wire actions
+      document.querySelectorAll('button[data-action="mark-arrived"]').forEach(b=>{
+        b.onclick = async ()=> {
+          const id = b.dataset.id;
+          await riderConfirmArrived(id);
+          alert('You confirmed arrival. If buyer confirms too, funds will be released.');
+        };
+      });
+    });
+
+    // map placeholder start (map.js)
+    if(window.startMapForElement) startMapForElement('mapPlaceholder');
+  }
+
+  // init when user loaded
+  auth.onAuthStateChanged(async user=>{
+    if(!user) return window.location.href = 'index.html';
+    const uDoc = await db.collection('users').doc(user.uid).get();
+    currentUser = { uid: user.uid, ...(uDoc.exists ? uDoc.data() : {}) };
+    welcomeName.innerText = `Hi, ${currentUser.name || 'User'}`;
+    roleLabel.innerText = `Role: ${currentUser.role || '-'}`;
+    topUser.innerText = currentUser.name || user.email || '';
+    attachUserList();
+    attachSearch();
+    // show role specific tab automatically
+    if(currentUser.role === 'buyer') { renderBuyerUI(); }
+    else if(currentUser.role === 'seller') { renderSellerUI(); }
+    else { renderRiderUI(); }
+
+    // UI tab buttons allow role preview (for testing)
+    showBuyerTab.onclick = ()=> renderBuyerUI();
+    showSellerTab.onclick = ()=> renderSellerUI();
+    showRiderTab.onclick = ()=> renderRiderUI();
+  });
+
+  // search wiring
+  refreshUsersBtn.addEventListener('click', attachUserList);
+
+})();
