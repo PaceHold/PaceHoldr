@@ -1,5 +1,5 @@
 // firebase-config.js (compat)
-// Must be included BEFORE other app scripts
+// Include this before all app scripts in HTML pages
 if (!window.firebase) {
   console.error('Firebase compat SDK not loaded. Make sure HTML includes the compat scripts before this file.');
 }
