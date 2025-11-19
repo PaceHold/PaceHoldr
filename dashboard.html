@@ -6,27 +6,29 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">PaceHold</div>
+  <header class="topbar"><div class="brand">PaceHold</div>
     <div style="display:flex;gap:12px;align-items:center">
       <div id="topUser" class="small">Loading...</div>
       <button id="logoutBtn" class="primary">Logout</button>
     </div>
   </header>
 
-  <div class="container" style="padding-bottom:84px">
-    <aside style="width:320px">
+  <div class="container" style="padding-bottom:92px">
+    <aside class="left" style="width:340px">
       <div class="card">
-        <h3 id="welcomeName">Welcome</h3>
-        <div id="roleLabel" class="small muted">Role: -</div>
+        <div class="welcome">
+          <h3 id="welcomeName">Welcome</h3>
+          <div id="roleLabel" class="small muted">Role: -</div>
+        </div>
 
-        <div style="margin-top:12px">
+        <div style="margin-top:8px">
           <div class="card" style="padding:10px">
             <div class="small muted">Instruction: Search users</div>
             <div style="display:flex;gap:8px;margin-top:8px">
-              <input id="searchInput" placeholder="Search by name, email..." />
+              <input id="searchInput" placeholder="Search by name or uid..." />
               <button id="refreshUsers" title="Refresh">⟳</button>
             </div>
+            <div class="small muted" style="margin-top:6px">Showing: <span id="searchRoleLabel">—</span></div>
           </div>
 
           <div class="user-list" id="userList" style="margin-top:8px">
@@ -41,60 +43,44 @@
         <div style="display:flex;justify-content:space-between;align-items:center">
           <h3 id="activeTitle">Overview</h3>
           <div style="display:flex;gap:8px">
-            <button class="primary" id="createEscrowBtn">Create Escrow</button>
-            <button class="primary" id="fundWalletBtn">Fund Wallet</button>
+            <button id="showBuyerTab" class="primary">Buyer</button>
+            <button id="showSellerTab" class="primary">Seller</button>
+            <button id="showRiderTab" class="primary">Rider</button>
           </div>
         </div>
 
-        <div id="roleArea" style="margin-top:12px">
-          <div id="loadingArea">Loading dashboard…</div>
-        </div>
+        <div id="roleArea" style="margin-top:12px">Loading…</div>
       </div>
     </main>
   </div>
 
   <!-- chat fab -->
   <div class="chat-fab" id="chatFab" onclick="toggleChatPanel()">
-    <div style="position:relative">
-      <div class="bell">💬</div>
-      <div id="chatBadge" class="chat-badge" style="display:none">1</div>
-    </div>
+    <div style="position:relative"><div class="bell">💬</div><div id="chatBadge" class="chat-badge" style="display:none">1</div></div>
   </div>
 
   <!-- chat panel -->
   <div id="chatPanel" class="chat-panel" style="display:none">
     <div class="chat-header">
-      <div>
-        <div id="chatWith" style="font-weight:700">Chat</div>
-        <div id="chatWithSub" style="font-size:12px;color:#ccc">Private conversation</div>
-      </div>
-      <div>
-        <button onclick="closeChatPanel()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:16px">✕</button>
-      </div>
+      <div><div id="chatWith" style="font-weight:700">Chat</div><div id="chatWithSub" style="font-size:12px;color:#ccc">Private conversation</div></div>
+      <div><button onclick="closeChatPanel()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:16px">✕</button></div>
     </div>
     <div id="chatBody" class="chat-body"></div>
-    <div class="chat-input">
-      <input id="messageInput" placeholder="Write a message..." />
-      <button id="sendMessageBtn">Send</button>
-    </div>
+    <div class="chat-input"><input id="messageInput" placeholder="Write a message..." /><button id="sendMessageBtn">Send</button></div>
   </div>
 
-  <!-- bottom tabs (mobile style visual aid) -->
-  <div class="bottom-tabs" style="display:none">
-    <button class="tab-btn active" data-tab="overview">Overview</button>
-    <button class="tab-btn" data-tab="escrows">Escrows</button>
-    <button class="tab-btn" data-tab="chat">Chat</button>
-  </div>
-
-  <!-- Firebase & Paystack -->
+  <!-- firebase + paystack -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
   <script src="https://js.paystack.co/v1/inline.js"></script>
 
-  <!-- App scripts (order matters) -->
   <script src="firebase-config.js"></script>
+  <script src="auth.js"></script>
   <script src="escrow.js"></script>
+  <script src="chat.js"></script>
+  <script src="map.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>
