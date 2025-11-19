@@ -1,10 +1,9 @@
-// escrow.js — escrow helpers used by dashboard + other scripts
+// escrow.js — escrow helpers & release logic (4% fee)
 (function(){
   if(!window.db) return console.error('firebase-config missing');
-
   const PLATFORM_FEE_PERCENT = 4;
 
-  // create a transaction (called after Paystack success or as hold)
+  // createTransaction: called after successful payment (Paystack)
   window.createTransaction = async function({ buyerUid, sellerUid, amount, reference, description }){
     const docRef = db.collection('transactions').doc(reference || db.collection('transactions').doc().id);
     const fee = Math.round((PLATFORM_FEE_PERCENT/100) * Number(amount) * 100) / 100;
@@ -24,7 +23,7 @@
       created_at: firebase.firestore.FieldValue.serverTimestamp(),
       participants: [buyerUid, sellerUid]
     });
-    // notify seller via notifications collection (simple doc)
+    // notify seller
     await db.collection('notifications').add({
       to: sellerUid,
       type: 'new_escrow',
@@ -35,7 +34,7 @@
     return docRef.id;
   };
 
-  // seller requests rider (creates a rider request doc)
+  // sellerRequestRider: seller requests rider
   window.sellerRequestRider = async function(txId, sellerUid, pickupDetails){
     const reqRef = db.collection('riderRequests').doc();
     await reqRef.set({
@@ -46,12 +45,16 @@
       status: 'open',
       created_at: firebase.firestore.FieldValue.serverTimestamp()
     });
-    // optionally write on transaction
     await db.collection('transactions').doc(txId).update({ riderRequestId: reqRef.id, status: 'seller_requested_rider' });
+    // notify riders (simple approach: add notification docs)
+    const ridersSnap = await db.collection('users').where('role','==','rider').get();
+    ridersSnap.forEach(r => {
+      db.collection('notifications').add({ to: r.id, type: 'rider_request', reqId: reqRef.id, txId, created_at: firebase.firestore.FieldValue.serverTimestamp() });
+    });
     return reqRef.id;
   };
 
-  // assign rider (seller assigns or rider picks and assignment is saved)
+  // assign rider to tx (when rider accepts)
   window.assignRiderToTx = async function(txId, riderUid){
     await db.collection('transactions').doc(txId).update({
       rider_uid: riderUid,
@@ -59,29 +62,24 @@
       updated_at: firebase.firestore.FieldValue.serverTimestamp(),
       participants: firebase.firestore.FieldValue.arrayUnion(riderUid)
     });
-    // notify buyer & seller
     const tx = (await db.collection('transactions').doc(txId).get()).data();
-    await db.collection('notifications').add({ to: tx.buyer_uid, type: 'rider_assigned', txId, riderUid, created_at: firebase.firestore.FieldValue.serverTimestamp() });
+    await db.collection('notifications').add({ to: tx.seller_uid, type:'rider_assigned', txId, riderUid, created_at: firebase.firestore.FieldValue.serverTimestamp() });
+    await db.collection('notifications').add({ to: tx.buyer_uid, type:'rider_assigned', txId, riderUid, created_at: firebase.firestore.FieldValue.serverTimestamp() });
   };
 
-  // rider confirms arrived; buyer confirms arrived → when both true auto release
+  // rider confirms arrived
   window.riderConfirmArrived = async function(txId){
-    await db.collection('transactions').doc(txId).update({
-      riderConfirmed: true,
-      updated_at: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    await db.collection('transactions').doc(txId).update({ riderConfirmed: true, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
     if(window.tryAutoRelease) tryAutoRelease(txId).catch(()=>{});
   };
 
+  // buyer confirms arrived
   window.buyerConfirmArrived = async function(txId){
-    await db.collection('transactions').doc(txId).update({
-      buyerConfirmed: true,
-      updated_at: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    await db.collection('transactions').doc(txId).update({ buyerConfirmed: true, updated_at: firebase.firestore.FieldValue.serverTimestamp() });
     if(window.tryAutoRelease) tryAutoRelease(txId).catch(()=>{});
   };
 
-  // tryAutoRelease: when both buyer & rider confirmed -> release funds
+  // tryAutoRelease: when both buyer & rider confirmed → release funds (fee deducted)
   window.tryAutoRelease = async function(txId){
     const txRef = db.collection('transactions').doc(txId);
     try {
