@@ -1,125 +1,48 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Escrow Transaction</title>
-
-    <!-- Deep Navy Gradient Style (matches your screenshot) -->
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: "Poppins", sans-serif;
-            background: linear-gradient(145deg, #000A1F, #001A3D);
-            color: white;
-            height: 100vh;
-            overflow-x: hidden;
-        }
-
-        header {
-            padding: 25px;
-            text-align: center;
-            font-size: 22px;
-            font-weight: bold;
-            color: #ffffff;
-        }
-
-        .container {
-            padding: 20px;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.08);
-            padding: 18px;
-            border-radius: 14px;
-            margin-bottom: 20px;
-            backdrop-filter: blur(10px);
-        }
-
-        .primary-btn {
-            width: 100%;
-            padding: 15px;
-            border: none;
-            border-radius: 12px;
-            background: #00C6FF;
-            color: #001A3D;
-            font-weight: bold;
-            font-size: 16px;
-            margin-top: 10px;
-        }
-    </style>
-
-    <!-- Firebase -->
-    <script type="module" src="./firebase-config.js"></script>
-    <script type="module" src="./auth.js"></script>
-    <script type="module" src="./escrow.js"></script>
-
-    <!-- Paystack Inline Script -->
-    <script src="https://js.paystack.co/v1/inline.js"></script>
-</head>
-
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Transaction</title><link rel="stylesheet" href="style.css"></head>
 <body>
-
-<header>Escrow Transaction</header>
-
-<div class="container">
-
+  <header class="topbar"><div class="brand">PaceHold</div></header>
+  <main style="padding:18px">
     <div class="card">
-        <h3>Order Summary</h3>
-        <p><strong>Item:</strong> <span id="itemName">Loading…</span></p>
-        <p><strong>Amount:</strong> ₦<span id="amount">0</span></p>
-        <p><strong>Buyer:</strong> <span id="buyerName">Loading…</span></p>
-        <p><strong>Seller:</strong> <span id="sellerName">Loading…</span></p>
+      <h3>Quick Transaction</h3>
+      <input id="txSellerUid" placeholder="Seller UID" />
+      <input id="txAmount" type="number" placeholder="Amount (₦)" />
+      <input id="txDescription" placeholder="Description" />
+      <button id="txPayBtn" class="primary">Pay with Paystack</button>
     </div>
+  </main>
 
-    <div class="card">
-        <h3>Proceed to Payment</h3>
-        <button class="primary-btn" id="payBtn">Pay with Paystack</button>
-    </div>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="auth.js"></script>
+  <script src="escrow.js"></script>
 
-</div>
-
-<script>
-    // Load data (Firebase → escrow.js will update)
-    document.addEventListener("DOMContentLoaded", () => {
-        if (localStorage.getItem("orderData")) {
-            let order = JSON.parse(localStorage.getItem("orderData"));
-            document.getElementById("itemName").innerText = order.item;
-            document.getElementById("amount").innerText = order.amount;
-            document.getElementById("buyerName").innerText = order.buyer;
-            document.getElementById("sellerName").innerText = order.seller;
-        }
+  <script>
+    document.getElementById('txPayBtn').addEventListener('click', async ()=>{
+      const sellerUid = document.getElementById('txSellerUid').value.trim();
+      const amount = Number(document.getElementById('txAmount').value);
+      const desc = document.getElementById('txDescription').value || 'Escrow';
+      if(!sellerUid) return alert('Enter seller uid');
+      if(!amount) return alert('Enter amount');
+      const user = auth.currentUser;
+      if(!user) return alert('Login first');
+      const handler = PaystackPop.setup({
+        key: 'PAYSTACK_PUBLIC_KEY_HERE',
+        email: user.email,
+        amount: Math.round(amount * 100),
+        currency: 'NGN',
+        callback: async function(response){
+          await createTransaction({ buyerUid: user.uid, sellerUid, amount, reference: response.reference, description: desc });
+          alert('Transaction created: ' + response.reference);
+        },
+        onClose: function(){ alert('Cancelled'); }
+      });
+      handler.openIframe();
     });
-
-    // Paystack payment handler
-    document.getElementById("payBtn").onclick = function () {
-        let order = JSON.parse(localStorage.getItem("orderData"));
-        if (!order) {
-            alert("Order not found.");
-            return;
-        }
-
-        let handler = PaystackPop.setup({
-            key: "pk_test_xxxxxxxxxxxxxxxxxxxxxx", // Replace with YOUR public key
-            email: order.buyerEmail,
-            amount: order.amount * 100, // convert to Kobo
-            currency: "NGN",
-            onClose: function () {
-                alert("Payment canceled.");
-            },
-            callback: function (response) {
-                // Save payment reference
-                localStorage.setItem("payRef", response.reference);
-
-                // Move process to Firebase escrow.js
-                window.location.href = "./buyer-dashboard.html";
-            }
-        });
-
-        handler.openIframe();
-    };
-</script>
-
+  </script>
 </body>
 </html>
