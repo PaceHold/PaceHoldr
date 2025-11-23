@@ -1,7 +1,7 @@
 // firebase-config.js (compat - paste as-is)
 if (!window.firebase) {
   console.error('Firebase SDK not loaded. Make sure HTML includes firebase-app-compat etc before this file.');
-}
+} 
 if (!firebase.apps || !firebase.apps.length) {
   const firebaseConfig = {
     apiKey: "AIzaSyAvfyYoeooY5bx1Z-SGdcEWA-G_zGFY5B8",
