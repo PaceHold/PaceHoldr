@@ -1,23 +1,53 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rider</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Rider | PaceHold</title>
+  <link rel="stylesheet" href="style.css">
 </head>
+<body>
+  <header class="topbar">
+    <div class="brand">PaceHold</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div id="riderTopUser" class="small">Loading...</div>
+      <button id="riderLogout" class="primary">Logout</button>
+    </div>
+  </header>
 
-<body class="gradient-bg">
+  <div class="container" style="padding-bottom:120px">
+    <aside class="left">
+      <div class="card">
+        <h4>Your Assignments</h4>
+        <div id="riderAssignments" class="user-list" style="margin-top:10px">
+          <div class="small muted">Loading assignments…</div>
+        </div>
+      </div>
+    </aside>
 
-  <h2 class="title">Rider Dashboard</h2>
+    <main style="flex:1">
+      <div class="card">
+        <h3>Rider — Task Manager</h3>
+        <div class="boxes" style="display:flex;gap:12px;margin-top:12px">
+          <div class="box"><div class="label">Active</div><div id="riderActive" class="amount">0</div></div>
+          <div class="box"><div class="label">Completed</div><div id="riderCompleted" class="amount">0</div></div>
+        </div>
 
-  <div class="container">
-    <button id="viewDeliveriesBtn" class="btn">View Deliveries</button>
-    <button id="logoutBtn" class="btn outline">Logout</button>
+        <div style="margin-top:12px" id="riderTaskList"><div class="small muted">Loading tasks…</div></div>
+        <div style="margin-top:12px" id="mapBox" class="card"><div id="mapPlaceholder" class="map-placeholder">Map placeholder — Google Maps will show here</div></div>
+      </div>
+    </main>
   </div>
 
-  <script type="module" src="firebase-config.js"></script>
-  <script type="module" src="auth.js"></script>
-  <script type="module" src="dashboard.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <script src="firebase-config.js"></script>
+  <script src="auth.js"></script>
+  <script src="dashboard.js"></script>
+  <script src="chat.js"></script>
+  <script src="escrow.js"></script>
+  <script src="map.js"></script>
 </body>
 </html>
