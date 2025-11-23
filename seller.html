@@ -1,24 +1,50 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Seller</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Seller | PaceHold</title>
+  <link rel="stylesheet" href="style.css">
 </head>
+<body>
+  <header class="topbar">
+    <div class="brand">PaceHold</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div id="sellerTopUser" class="small">Loading...</div>
+      <button id="sellerLogout" class="primary">Logout</button>
+    </div>
+  </header>
 
-<body class="gradient-bg">
+  <div class="container" style="padding-bottom:120px">
+    <aside class="left">
+      <div class="card">
+        <h4>Search Riders</h4>
+        <div style="display:flex;gap:8px">
+          <input id="sellerSearch" placeholder="Search rider name or uid" />
+          <button id="sellerSearchBtn">Search</button>
+        </div>
+        <div id="sellerRiderList" class="user-list" style="margin-top:10px"></div>
+      </div>
+    </aside>
 
-  <h2 class="title">Seller Dashboard</h2>
-
-  <div class="container">
-    <button id="viewOrdersBtn" class="btn">View Orders</button>
-    <button id="logoutBtn" class="btn outline">Logout</button>
+    <main style="flex:1">
+      <div class="card">
+        <h3>Seller — Business Hub</h3>
+        <div id="sellerNotifications" class="notice small muted">Notifications will appear here</div>
+        <div id="sellerOrdersList" style="margin-top:12px"><div class="small muted">Loading orders…</div></div>
+      </div>
+    </main>
   </div>
 
-  <script type="module" src="firebase-config.js"></script>
-  <script type="module" src="auth.js"></script>
-  <script type="module" src="dashboard.js"></script>
-  <script type="module" src="escrow.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <script src="firebase-config.js"></script>
+  <script src="auth.js"></script>
+  <script src="dashboard.js"></script>
+  <script src="chat.js"></script>
+  <script src="escrow.js"></script>
+  <script src="map.js"></script>
 </body>
 </html>
