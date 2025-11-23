@@ -1,19 +1,22 @@
-// auth.js — session guard + role lock
-(function(){
-  auth.onAuthStateChanged(async user=>{
-    if(!user) return; // no action here, pages will redirect if needed
-    const udoc = await db.collection('users').doc(user.uid).get();
-    if(!udoc.exists || !udoc.data().role){
-      // if user somehow lacks role, send to index to pick role
-      try { await auth.signOut(); } catch(e){}
-      window.location.href = 'index.html';
-      return;
-    }
-  });
+// auth.js — session guard + role lock (compat)
+auth.onAuthStateChanged(async user=>{
+  if(!user) {
+    // Not signed in — some pages may redirect
+    return;
+  }
+  const doc = await db.collection('users').doc(user.uid).get();
+  if(!doc.exists || !doc.data().role){
+    // No role — sign out and force user to pick role on index
+    try { await auth.signOut(); } catch(e){}
+    window.location.href = 'index.html';
+    return;
+  }
+  // All good — role locked until logout
+});
 
-  document.addEventListener('click', (e)=>{
-    if(e.target && e.target.id === 'logoutBtn') {
-      auth.signOut().then(()=> window.location.href = 'index.html');
-    }
-  });
-})();
+// global logout wiring (buttons with id logoutBtn, buyerLogout, sellerLogout, riderLogout)
+document.addEventListener('click', (e)=>{
+  if(e.target && (e.target.id === 'logoutBtn' || e.target.id === 'buyerLogout' || e.target.id === 'sellerLogout' || e.target.id === 'riderLogout')) {
+    auth.signOut().then(()=> window.location.href = 'index.html');
+  }
+});
