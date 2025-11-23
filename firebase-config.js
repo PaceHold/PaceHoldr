@@ -1,7 +1,6 @@
-// firebase-config.js (compat)
-// Include this before all app scripts in HTML pages
+// firebase-config.js (compat - paste as-is)
 if (!window.firebase) {
-  console.error('Firebase compat SDK not loaded. Make sure HTML includes the compat scripts before this file.');
+  console.error('Firebase SDK not loaded. Make sure HTML includes firebase-app-compat etc before this file.');
 }
 if (!firebase.apps || !firebase.apps.length) {
   const firebaseConfig = {
