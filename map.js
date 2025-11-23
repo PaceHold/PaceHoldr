@@ -1,6 +1,6 @@
 // map.js — placeholder helpers for Google Maps integration
 window.mapRegistry = {};
-window.riderMarkers = {}; 
+window.riderMarkers = {};
 
 window.initMap = function(){ console.log('initMap placeholder called. Include Google Maps script tag with callback=initMap and implement marker logic.'); };
 
