@@ -1,24 +1,63 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Buyer</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Buyer | PaceHold</title>
+  <link rel="stylesheet" href="style.css">
 </head>
+<body>
+  <header class="topbar">
+    <div class="brand">PaceHold</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <div id="buyerTopUser" class="small">Loading...</div>
+      <button id="buyerLogout" class="primary">Logout</button>
+    </div>
+  </header>
 
-<body class="gradient-bg">
+  <div class="container" style="padding-bottom:120px">
+    <aside class="left">
+      <div class="card">
+        <h4>Search Sellers</h4>
+        <div style="display:flex;gap:8px">
+          <input id="buyerSearch" placeholder="Search seller name or uid" />
+          <button id="buyerSearchBtn">Search</button>
+        </div>
+        <div id="buyerSellerList" class="user-list" style="margin-top:10px"></div>
+      </div>
+    </aside>
 
-  <h2 class="title">Buyer Dashboard</h2>
+    <main style="flex:1">
+      <div class="card">
+        <h3>Buyer — Tracking</h3>
+        <div class="notice">Service fee: <span class="badge">4%</span></div>
+        <div class="boxes" style="display:flex;gap:12px;margin-top:12px">
+          <div class="box"><div class="label">Wallet</div><div id="buyerWallet" class="amount">₦0</div></div>
+          <div class="box"><div class="label">Active Holds</div><div id="buyerEscrowCount" class="amount">0</div></div>
+        </div>
 
-  <div class="container">
-    <button id="createTransactionBtn" class="btn">Create Transaction</button>
-    <button id="logoutBtn" class="btn outline">Logout</button>
+        <div style="margin-top:12px">
+          <h4>Create Escrow</h4>
+          <input id="escrowSellerUid" placeholder="Seller UID (from left)" />
+          <input id="escrowAmount" type="number" placeholder="Amount (₦)" />
+          <div class="small muted">4% service fee will be shown and applied on release.</div>
+          <button id="createEscrowBtn" class="primary">Create Escrow</button>
+        </div>
+
+        <div style="margin-top:12px" id="buyerTxList"><div class="small muted">Loading your transactions…</div></div>
+      </div>
+    </main>
   </div>
 
-  <script type="module" src="firebase-config.js"></script>
-  <script type="module" src="auth.js"></script>
-  <script type="module" src="dashboard.js"></script>
-  <script type="module" src="escrow.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <script src="firebase-config.js"></script>
+  <script src="auth.js"></script>
+  <script src="dashboard.js"></script>
+  <script src="chat.js"></script>
+  <script src="escrow.js"></script>
+  <script src="map.js"></script>
 </body>
-                                                   </html>
+</html>
