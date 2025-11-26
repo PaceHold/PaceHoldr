@@ -1,5 +1,5 @@
 import { 
-    auth, 
+    auth,  
     db 
 } from "./script.js";
 
