@@ -1,80 +1,91 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
-
-    <link rel="stylesheet" href="styles.css">
-
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background: #0a1a3c; /* your original deep blue */
-            color: white;
-            font-family: Arial, sans-serif;
-        }
-
-        .container {
-            padding: 20px;
-        }
-
-        h2 {
-            margin-bottom: 10px;
-        }
-
-        .card {
-            background: rgba(255, 255, 255, 0.08);
-            padding: 15px;
-            margin-top: 10px;
-            border-radius: 10px;
-        }
-
-        .label {
-            opacity: 0.7;
-        }
-
-        .value {
-            font-weight: bold;
-            margin-bottom: 6px;
-        }
-    </style>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PaceHold Dashboard</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
-    <div class="container">
-        <h2>Dashboard</h2>
-
-        <div class="card">
-            <div class="label">Username:</div>
-            <div id="username" class="value">Loading...</div>
-
-            <div class="label">Email:</div>
-            <div id="email" class="value">Loading...</div>
-
-            <div class="label">Role:</div>
-            <div id="role" class="value">Loading...</div>
-
-            <div class="label">UID:</div>
-            <div id="uid" class="value">Loading...</div>
-
-            <div class="label">Created At:</div>
-            <div id="createdAt" class="value">Loading...</div>
-        </div>
-
-        <h2>Wallet</h2>
-
-        <div class="card">
-            <div class="label">Balance:</div>
-            <div id="balance" class="value">Loading...</div>
-
-            <div class="label">Escrow Held:</div>
-            <div id="escrowHeld" class="value">Loading...</div>
-        </div>
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div class="brand">PaceHold</div>
+      <div id="roleIndicator" class="role-indicator">Loading...</div>
     </div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <div id="topUser" class="small">Loading...</div>
+      <div id="notify" class="notify-bell" title="Notifications">
+        🔔 <span id="notifyBadge" style="background:#ff3b30;color:#fff;padding:2px 6px;border-radius:100px;margin-left:6px;display:none">0</span>
+        <div id="notifyDropdown" class="notify-dropdown"></div>
+      </div>
+      <button id="logoutBtn" class="primary">Logout</button>
+    </div>
+  </header>
 
-    <script type="module" src="dashboard.js"></script>
+  <div class="container" style="padding-bottom:92px">
+    <aside class="left">
+      <div class="card">
+        <div class="welcome">
+          <h3 id="welcomeName">Welcome</h3>
+          <div id="roleLabel" class="small muted">Role: -</div>
+        </div>
+
+        <div style="margin-top:8px">
+          <div class="card" style="padding:10px">
+            <div class="small muted">Instruction: Search users</div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <input id="searchInput" placeholder="Search by name or uid..." />
+              <button id="refreshUsers" title="Refresh">⟳</button>
+            </div>
+            <div class="small muted" style="margin-top:6px">Showing: <span id="searchRoleLabel">—</span></div>
+          </div>
+
+          <div class="user-list" id="userList" style="margin-top:8px">
+            <div style="color:#bbb;text-align:center;padding:10px">Loading users…</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main style="flex:1">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h3 id="activeTitle">Overview</h3>
+          <div class="stats-row" style="gap:10px">
+            <div class="stat"><div class="small muted">Total tx</div><div id="statTotal" style="font-weight:800">0</div></div>
+            <div class="stat"><div class="small muted">Active</div><div id="statActive" style="font-weight:800">0</div></div>
+            <div class="stat"><div class="small muted">Completed</div><div id="statCompleted" style="font-weight:800">0</div></div>
+          </div>
+        </div>
+
+        <div id="roleArea" style="margin-top:12px">Loading…</div>
+      </div>
+    </main>
+  </div>
+
+  <!-- chat floating and panel -->
+  <div class="chat-fab" id="chatFab" onclick="toggleChatPanel()">💬</div>
+
+  <div id="chatPanel" class="chat-panel" style="display:none">
+    <div class="chat-header">
+      <div><div id="chatWith" style="font-weight:700">Chat</div><div id="chatWithSub" style="font-size:12px;color:#ccc">Private conversation</div></div>
+      <div><button onclick="closeChatPanel()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:18px">✕</button></div>
+    </div>
+    <div id="chatBody" class="chat-body"></div>
+    <div class="chat-input"><input id="messageInput" placeholder="Write a message..." /><button id="sendMessageBtn">Send</button></div>
+  </div>
+
+  <!-- Firebase + Paystack -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <script src="https://js.paystack.co/v1/inline.js"></script>
+
+  <script src="firebase-config.js"></script>
+  <script src="auth.js"></script>
+  <script src="escrow.js"></script>
+  <script src="chat.js"></script>
+  <script src="map.js"></script>
+  <script src="dashboard.js"></script>
 </body>
 </html>
