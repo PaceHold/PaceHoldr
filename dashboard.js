@@ -1,131 +1,76 @@
-// ============================
-// DASHBOARD.JS  (UPDATED)
-// ============================
+import { 
+    auth, 
+    db 
+} from "./script.js";
 
-// Firebase initialization (keep your existing config)
-const auth = firebase.auth();
-const db = firebase.firestore();
+import { 
+    onAuthStateChanged 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-// Detect current user
-auth.onAuthStateChanged(async (user) => {
+import { 
+    doc, 
+    getDoc 
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+// -------------------------------
+// WAIT FOR USER AUTH STATE
+// -------------------------------
+onAuthStateChanged(auth, async (user) => {
     if (!user) {
+        // Not logged in → go back to login
         window.location.href = "index.html";
         return;
     }
 
     const uid = user.uid;
 
-    // Fetch logged-in user data
-    const userDoc = await db.collection("users").doc(uid).get();
-    const userData = userDoc.data();
+    try {
+        // -------------------------------
+        // FETCH USER DOCUMENT
+        // -------------------------------
+        const userRef = doc(db, "users", uid);
+        const userSnap = await getDoc(userRef);
 
-    const userRole = userData.role;
-    const username = userData.username;
-    const userUID = userData.uid;
+        if (!userSnap.exists()) {
+            console.error("User document missing in Firestore");
+            return;
+        }
 
-    // Display user details
-    document.getElementById("usernameDisplay").innerText = username;
-    document.getElementById("roleDisplay").innerText = userRole.toUpperCase();
-    document.getElementById("uidDisplay").innerText = userUID;
+        const userData = userSnap.data();
 
-    // Load search based on role
-    loadSearchList(userRole);
+        // -------------------------------
+        // UPDATE USER INFO
+        -------------------------------
+        document.getElementById("username").innerText = userData.username || "N/A";
+        document.getElementById("email").innerText = userData.email || "N/A";
+        document.getElementById("role").innerText = userData.role || "N/A";
+        document.getElementById("uid").innerText = uid;
+
+        // Format createdAt timestamp
+        if (userData.createdAt && userData.createdAt.toDate) {
+            document.getElementById("createdAt").innerText =
+                userData.createdAt.toDate().toLocaleString();
+        } else {
+            document.getElementById("createdAt").innerText = "N/A";
+        }
+
+        // -------------------------------
+        // LOAD WALLET DOCUMENT
+        // -------------------------------
+        const walletRef = doc(db, "wallets", uid);
+        const walletSnap = await getDoc(walletRef);
+
+        if (walletSnap.exists()) {
+            const wallet = walletSnap.data();
+            document.getElementById("balance").innerText = wallet.balance ?? 0;
+            document.getElementById("escrowHeld").innerText = wallet.escrowHeld ?? 0;
+        } else {
+            // Wallet not created yet
+            document.getElementById("balance").innerText = 0;
+            document.getElementById("escrowHeld").innerText = 0;
+        }
+
+    } catch (error) {
+        console.error("Error loading dashboard:", error);
+    }
 });
-
-
-// ===========================
-// ROLE-BASED USER SEARCH
-// ===========================
-
-async function loadSearchList(role) {
-    const listContainer = document.getElementById("searchResults");
-
-    // Clear existing
-    listContainer.innerHTML = "";
-
-    // ❌ RIDER SHOULD NOT SEE BUYERS OR SELLERS
-    if (role === "rider") {
-        listContainer.innerHTML =
-            `<p style="color:#8899AA; font-size:14px; text-align:center;">
-                Riders cannot search for buyers or sellers.
-            </p>`;
-        return; // ⛔ STOP HERE
-    }
-
-    // ✅ BUYER → should see only SELLERS
-    // ✅ SELLER → should see only BUYERS
-    let targetRole = "";
-
-    if (role === "buyer") targetRole = "seller";
-    if (role === "seller") targetRole = "buyer";
-
-    const usersSnap = await db.collection("users")
-        .where("role", "==", targetRole)
-        .get();
-
-    if (usersSnap.empty) {
-        listContainer.innerHTML =
-            `<p style="color:#8899AA; text-align:center;">No users found.</p>`;
-        return;
-    }
-
-    usersSnap.forEach(doc => {
-        const data = doc.data();
-        const userItem = document.createElement("div");
-
-        userItem.className = "search-item";
-
-        userItem.innerHTML = `
-            <strong style="font-size:15px;">${data.username}</strong>
-            <p style="font-size:12px; color:#7a8a9a;">UID: ${data.uid}</p>
-        `;
-
-        // Click → open chat
-        userItem.addEventListener("click", () => {
-            openChatWith(data.uid, data.username);
-        });
-
-        listContainer.appendChild(userItem);
-    });
-}
-
-
-// ===========================
-// CHAT SYSTEM
-// (Your existing chat logic remains the same)
-// ===========================
-
-async function openChatWith(targetUID, targetName) {
-    document.getElementById("chatName").innerText = targetName;
-    document.getElementById("chatBox").style.display = "flex";
-    loadMessages(targetUID);
-}
-
-async function sendMessage() {
-    const message = document.getElementById("messageInput").value.trim();
-    if (message === "") return;
-
-    const user = auth.currentUser;
-    const sender = user.uid;
-
-    const chatRef = db.collection("messages").doc();
-    await chatRef.set({
-        senderUID: sender,
-        message: message,
-        timestamp: Date.now()
-    });
-
-    document.getElementById("messageInput").value = "";
-}
-
-function loadMessages(targetUID) {
-    // Your existing chat loading logic remains untouched
-}
-
-
-// ===========================
-// LOGOUT
-// ===========================
-function logout() {
-    auth.signOut();
-}
